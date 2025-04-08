@@ -102,7 +102,6 @@ void OpenAssetIOAsset::reset()
 
     try
     {
-        hostInterface_ = std::make_shared<KatanaHostInterface>();
         const auto logger = std::make_shared<KatanaLoggerInterface>();
 
         // Create the appropriate plugin system.
@@ -125,8 +124,8 @@ void OpenAssetIOAsset::reset()
                 logger);
         }();
 
-        manager_ =
-            ManagerFactory::defaultManagerForInterface(hostInterface_, managerImplFactory, logger);
+        manager_ = ManagerFactory::defaultManagerForInterface(
+            std::make_shared<KatanaHostInterface>(), managerImplFactory, logger);
 
         if (!manager_)
         {
