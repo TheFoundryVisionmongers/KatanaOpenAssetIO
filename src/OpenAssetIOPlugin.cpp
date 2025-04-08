@@ -125,7 +125,7 @@ void OpenAssetIOAsset::reset()
 
     try
     {
-        const auto logger = std::make_shared<KatanaLoggerInterface>();
+        logger_ = std::make_shared<KatanaLoggerInterface>();
 
         // Create the appropriate plugin system.
         const auto managerImplFactory = [&]() -> ManagerImplementationFactoryInterfacePtr
@@ -135,20 +135,20 @@ void OpenAssetIOAsset::reset()
             {
                 // User has chosen to disable Python manager plugins. So
                 // just use the C++ plugin system.
-                return CppPluginSystemManagerImplementationFactory::make(logger);
+                return CppPluginSystemManagerImplementationFactory::make(logger_);
             }
             // Support  C++ or Python or hybrid C++/Python plugins.
             return HybridPluginSystemManagerImplementationFactory::make(
                 {// Plugin systems:
                  // C++ plugin system
-                 CppPluginSystemManagerImplementationFactory::make(logger),
+                 CppPluginSystemManagerImplementationFactory::make(logger_),
                  // Python plugin system
-                 pyApi::createPythonPluginSystemManagerImplementationFactory(logger)},
-                logger);
+                 pyApi::createPythonPluginSystemManagerImplementationFactory(logger_)},
+                logger_);
         }();
 
         manager_ = ManagerFactory::defaultManagerForInterface(
-            std::make_shared<KatanaHostInterface>(), managerImplFactory, logger);
+            std::make_shared<KatanaHostInterface>(), managerImplFactory, logger_);
 
         if (!manager_)
         {

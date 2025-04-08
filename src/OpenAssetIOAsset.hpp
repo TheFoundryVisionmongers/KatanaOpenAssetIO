@@ -290,6 +290,7 @@ private:
 
     PublishStrategies publishStrategies_;
 
+    openassetio::log::LoggerInterfacePtr logger_;
     openassetio::hostApi::ManagerPtr manager_;
     openassetio::ContextPtr context_;
     openassetio::utils::FileUrlPathConverter fileUrlPathConverter_;
