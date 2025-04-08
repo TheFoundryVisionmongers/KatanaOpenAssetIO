@@ -19,6 +19,7 @@
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
 #include <FnLogging/FnLogging.h>
+#include <FnLogging/suite/FnLoggingSuite.h>
 #include <FnPluginSystem/FnPlugin.h>
 
 #include <openassetio/EntityReference.hpp>
@@ -78,6 +79,28 @@ struct KatanaLoggerInterface : openassetio::log::LoggerInterface
 
         // Should never happen (check compiler warnings for unhandled `switch` case).
         FnLogError("Unhandled log severity:" + message);
+    }
+
+    [[nodiscard]] bool isSeverityLogged(const Severity severity) const override
+    {
+        switch (severity)
+        {
+        case Severity::kDebugApi:
+        case Severity::kDebug:
+            return _fnLog.isSeverityEnabled(kFnLoggingSeverityDebug);
+        case Severity::kInfo:
+        case Severity::kProgress:
+            return _fnLog.isSeverityEnabled(kFnLoggingSeverityInfo);
+        case Severity::kWarning:
+            return _fnLog.isSeverityEnabled(kFnLoggingSeverityWarning);
+        case Severity::kError:
+            return _fnLog.isSeverityEnabled(kFnLoggingSeverityError);
+        case Severity::kCritical:
+            return _fnLog.isSeverityEnabled(kFnLoggingSeverityCritical);
+        }
+
+        // Should never happen (check compiler warnings for unhandled `switch` case).
+        return false;
     }
 };
 
