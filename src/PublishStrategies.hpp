@@ -1,5 +1,5 @@
 // KatanaOpenAssetIO
-// Copyright (c) 2024 The Foundry Visionmongers Ltd
+// Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
@@ -8,8 +8,9 @@
 #include <unordered_map>
 
 #include <FnAsset/plugin/FnAsset.h>
-#include <openassetio/hostApi/Manager.hpp>
-#include <openassetio_mediacreation/traits/traits.hpp>
+
+#include <openassetio/trait/TraitsData.hpp>
+#include <openassetio/trait/collection.hpp>
 
 class PublishStrategy
 {
@@ -35,5 +36,5 @@ public:
     const PublishStrategy& strategyForAssetType(const std::string& assetType) const;
 
 private:
-    std::unordered_map<std::string, std::unique_ptr<PublishStrategy>> m_strategies;
+    std::unordered_map<std::string, std::unique_ptr<PublishStrategy>> strategies_;
 };

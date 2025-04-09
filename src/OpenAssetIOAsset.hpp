@@ -1,5 +1,5 @@
 // KatanaOpenAssetIO
-// Copyright (c) 2024 The Foundry Visionmongers Ltd
+// Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
@@ -15,7 +15,7 @@
 
 #include "PublishStrategies.hpp"
 
-class OpenAssetIOAsset : public FnKat::Asset
+class OpenAssetIOAsset final : public FnKat::Asset
 {
 public:
     OpenAssetIOAsset();
@@ -25,7 +25,7 @@ public:
     /**
     Factory method to create a new OpenAssetIOAsset instance.
     */
-    static Asset* create() { return new OpenAssetIOAsset(); }
+    static Asset* create() { return new OpenAssetIOAsset(); }  // NOLINT(*-owning-memory)
 
     static void flush() {}
 
@@ -286,12 +286,12 @@ public:
 private:
     std::optional<openassetio::EntityReference> entityRefForAssetIdAndVersion(
         const std::string& assetId,
-        const std::string& desiredVersionTag);
+        const std::string& desiredVersionTag) const;
 
-    PublishStrategies _publishStrategies;
+    PublishStrategies publishStrategies_;
 
-    openassetio::hostApi::HostInterfacePtr _hostInterface;
-    openassetio::hostApi::ManagerPtr _manager;
-    openassetio::ContextPtr _context;
-    openassetio::utils::FileUrlPathConverter _fileUrlPathConverter{};
+    openassetio::hostApi::HostInterfacePtr hostInterface_;
+    openassetio::hostApi::ManagerPtr manager_;
+    openassetio::ContextPtr context_;
+    openassetio::utils::FileUrlPathConverter fileUrlPathConverter_;
 };

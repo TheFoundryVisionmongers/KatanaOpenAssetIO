@@ -1,13 +1,23 @@
 // KatanaOpenAssetIO
-// Copyright (c) 2024 The Foundry Visionmongers Ltd
+// Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 // SPDX-License-Identifier: Apache-2.0
 #include "PublishStrategies.hpp"
 
+#include <memory>
+#include <stdexcept>
+#include <string>
+
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
-#include <FnLogging/FnLogging.h>
-#include <openassetio_mediacreation/openassetio_mediacreation.hpp>
-#include <openassetio_mediacreation/specifications/specifications.hpp>
+
+#include <openassetio/trait/TraitsData.hpp>
+#include <openassetio/trait/collection.hpp>
+
+#include <openassetio_mediacreation/specifications/application/WorkfileSpecification.hpp>
+#include <openassetio_mediacreation/specifications/threeDimensional/SceneGeometryResourceSpecification.hpp>
+#include <openassetio_mediacreation/specifications/threeDimensional/SceneLightingResourceSpecification.hpp>
+#include <openassetio_mediacreation/specifications/threeDimensional/ShaderResourceSpecification.hpp>
+#include <openassetio_mediacreation/specifications/twoDimensional/DeepBitmapImageResourceSpecification.hpp>
 
 namespace
 {
@@ -61,27 +71,27 @@ using SceneLightingAssetPublisher =
 
 PublishStrategies::PublishStrategies()
 {
-    m_strategies[kFnAssetTypeKatanaScene] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeKatanaScene] = std::make_unique<WorkfileAssetPublisher>();
     // TODO(DH): This would be better as something like ApplicationExtensionAssetPublisher...
-    m_strategies[kFnAssetTypeMacro] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeLiveGroup] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeImage] = std::make_unique<ImageAssetPublisher>();
-    m_strategies[kFnAssetTypeLookFile] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeLookFileMgrSettings] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeAlembic] = std::make_unique<SceneGeometryAssetPublisher>();
-    m_strategies[kFnAssetTypeCastingSheet] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeAttributeFile] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeFCurveFile] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeGafferThreeRig] = std::make_unique<SceneLightingAssetPublisher>();
-    m_strategies[kFnAssetTypeScenegraphBookmarks] = std::make_unique<WorkfileAssetPublisher>();
-    m_strategies[kFnAssetTypeShader] = std::make_unique<ShaderResourceAssetPublisher>();
+    strategies_[kFnAssetTypeMacro] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeLiveGroup] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeImage] = std::make_unique<ImageAssetPublisher>();
+    strategies_[kFnAssetTypeLookFile] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeLookFileMgrSettings] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeAlembic] = std::make_unique<SceneGeometryAssetPublisher>();
+    strategies_[kFnAssetTypeCastingSheet] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeAttributeFile] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeFCurveFile] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeGafferThreeRig] = std::make_unique<SceneLightingAssetPublisher>();
+    strategies_[kFnAssetTypeScenegraphBookmarks] = std::make_unique<WorkfileAssetPublisher>();
+    strategies_[kFnAssetTypeShader] = std::make_unique<ShaderResourceAssetPublisher>();
 }
 
 const PublishStrategy& PublishStrategies::strategyForAssetType(const std::string& assetType) const
 {
     try
     {
-        return *m_strategies.at(assetType);
+        return *strategies_.at(assetType);
     }
     catch (const std::out_of_range&)
     {

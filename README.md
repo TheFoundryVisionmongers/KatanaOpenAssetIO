@@ -165,3 +165,10 @@ See the OpenAssetIO contribution docs for how to structure
 [commit messages](https://github.com/OpenAssetIO/OpenAssetIO/blob/main/doc/contributing/COMMITS.md),
 the [pull request process](https://github.com/OpenAssetIO/OpenAssetIO/blob/main/doc/contributing/PULL_REQUESTS.md),
 and [coding style guide](https://github.com/OpenAssetIO/OpenAssetIO/blob/main/doc/contributing/CODING_STYLE.md).
+
+The C++ code is formatted using [ClangFormat v19](https://releases.llvm.org/19.1.0/tools/clang/docs/ClangFormat.html).
+
+The C++ code is linted using [Clang-Tidy v19](https://releases.llvm.org/19.1.0/tools/clang/tools/extra/docs/clang-tidy/index.html).
+
+Hint: set `-DCMAKE_CXX_CLANG_TIDY=clang-tidy-19` on the command line for
+the CMake configure step, to run the checks as part of the build.
