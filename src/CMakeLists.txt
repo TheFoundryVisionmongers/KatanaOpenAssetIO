@@ -37,7 +37,7 @@ target_link_libraries(KatanaOpenAssetIOPlugin
     foundry.katana.FnAttribute
     foundry.katana.FnLogging
     foundry.katana.pystring
-    Python::Python
+    Python::Module
 )
 
 set_target_properties(KatanaOpenAssetIOPlugin

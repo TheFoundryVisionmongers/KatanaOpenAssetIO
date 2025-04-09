@@ -26,6 +26,11 @@ option(
     "Enable 'Asset' browser - a simple text box alternative to the file browser"
     OFF
 )
+option(
+    KATANAOPENASSETIO_ENABLE_TESTS
+    "Enable unit tests. Requires Katana license and Python development install."
+    OFF
+)
 
 # Global Settings -------------------------------------------------------------
 include(cmake/platform.cmake)
@@ -36,3 +41,9 @@ add_subdirectory(src)
 
 # Packaging -------------------------------------------------------------------
 include(cmake/installers.cmake)
+
+# Tests -------------------------------------------------------------------
+if (KATANAOPENASSETIO_ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

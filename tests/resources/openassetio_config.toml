@@ -1,0 +1,10 @@
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2022-2025 The Foundry Visionmongers Ltd
+
+[manager]
+identifier = "org.openassetio.examples.manager.bal"
+
+[manager.settings]
+# Empty library - will load libraries on-demand in tests.
+library_path = "${config_dir}/bal_db_empty.json"
+simulated_query_latency_ms = 0

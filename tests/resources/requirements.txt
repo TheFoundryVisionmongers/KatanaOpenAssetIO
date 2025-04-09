@@ -1,0 +1,8 @@
+# KatanaOpenAssetIO
+# SPDX-License-Identifier: Apache-2.0
+# Copyright 2025 The Foundry Visionmongers Ltd
+
+# Required by the CMake CTest tests.
+
+openassetio-mediacreation==1.0.0a11
+openassetio-manager-bal==1.0.0b1.post0

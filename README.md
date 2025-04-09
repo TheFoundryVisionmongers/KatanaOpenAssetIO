@@ -141,7 +141,32 @@ the above.
 |---------------------------------------------|----------------------------------------------------------------------------|---------|
 | KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS     | Enable a large set of compiler warnings for project targets                | ON      |
 | KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING | Enable security hardening features for project targets                     | ON      |
-| KATANAOPENASSETIO_ENABLE_UI_DELEGATE        | Enable 'Asset' browser - a simple text box alternative to the file browser | ON      |
+| KATANAOPENASSETIO_ENABLE_UI_DELEGATE        | Enable 'Asset' browser - a simple text box alternative to the file browser | OFF     |
+| KATANAOPENASSETIO_ENABLE_TESTS              | Enable unit tests (additional dependencies required)                       | OFF     |
+
+## Running tests
+
+Tests must be enabled by setting `KATANAOPENASSETIO_ENABLE_TESTS=ON` in
+the CMake configure stage.
+
+The tests have additional dependencies. They are known to build with
+
+- [Catch2](https://github.com/catchorg/Catch2) v3.5.1
+- [pybind11](https://pybind11.readthedocs.io/en/stable/) v2.9.2
+- Python 3.11 (development package)
+
+Additionally, the tests use the [Basic Asset Library](https://github.com/OpenAssetIO/OpenAssetIO-Manager-BAL)
+fake/mock asset manager in the Python environment. This will be
+downloaded and installed by the test runner, see [requirements.txt](tests/resources/requirements.txt).
+
+The test environment is configured by CMake's [CTest](https://cmake.org/cmake/help/latest/manual/ctest.1.html).
+
+The tests can be run using
+```
+ctest --test-dir build
+```
+where `build` is the build directory used when configuring/building
+the project.
 
 ## Limitations
 
