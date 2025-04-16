@@ -311,10 +311,27 @@ bool OpenAssetIOAsset::runAssetPluginCommand(const std::string& assetId,
                                                commandArgs,
                                                ")"));
     }
-    // TODO(DH): Implement runAssetPluginCommand()
     (void)assetId;
-    (void)command;
-    (void)commandArgs;
+
+    if (command == "initialize")
+    {
+        // Re-`initialize` the manager with updated settings. Will only
+        // work for string-valued settings (otherwise with throw). Note
+        // that partial updates are supported as per the API contract.
+        try
+        {
+            manager_->initialize({cbegin(commandArgs), cend(commandArgs)});
+        }
+        catch (const std::exception& exc)
+        {
+            if (logger_->isSeverityLogged(Severity::kDebug))
+            {
+                logger_->debug(logging::concatAsStr(
+                    "OpenAssetIOAsset::runAssetPluginCommand -> ERROR: ", exc.what()));
+            }
+            return false;
+        }
+    }
     return true;
 }
 
