@@ -821,21 +821,10 @@ void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
         auto traitSet =
             manager_->entityTraits(entityReference, EntityTraitsAccess::kRead, context_);
 
-        // Augment with DisplayName and Version if it isn't specified already for Katana's
-        // specified fields
-        traitSet.insert(DisplayNameTrait::kId);
-        traitSet.insert(VersionTrait::kId);
-
         using openassetio::access::ResolveAccess;
 
         const auto traitsData =
             manager_->resolve(entityReference, traitSet, ResolveAccess::kRead, context_);
-
-        // Katana's AssetAPI only standardises Name & Version fields.
-        // TODO(DH): Specify set of other well known fields?
-        returnAttrs[constants::kAssetId] = assetId;
-        returnAttrs[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
-        returnAttrs[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 
         // TODO(DH): Determine alternative way to surface traits to Katana?
         for (const auto& traitId : traitsData->traitSet())
