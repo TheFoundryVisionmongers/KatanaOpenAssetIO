@@ -57,3 +57,11 @@ if (KATANAOPENASSETIO_ENABLE_UI_DELEGATE)
         DESTINATION UIPlugins
     )
 endif ()
+
+if (KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO)
+    install(
+        FILES KatanaOpenAssetIOPatches.py
+        COMPONENT Plugin
+        DESTINATION Plugins
+    )
+endif ()

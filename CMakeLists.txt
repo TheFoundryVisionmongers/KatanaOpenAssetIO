@@ -1,5 +1,5 @@
 # KatanaOpenAssetIO
-# Copyright (c) 2024 The Foundry Visionmongers Ltd
+# Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 # SPDX-License-Identifier: Apache-2.0
 
 # Policies --------------------------------------------------------------------
@@ -24,7 +24,12 @@ option(
 option(
     KATANAOPENASSETIO_ENABLE_UI_DELEGATE
     "Enable 'Asset' browser - a simple text box alternative to the file browser"
-    OFF
+    ON
+)
+option(
+    KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO
+    "Enable Render node 'Pre-Render Publish Asset' patch to retain the preflight() reference"
+    ON
 )
 option(
     KATANAOPENASSETIO_ENABLE_TESTS

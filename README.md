@@ -137,12 +137,13 @@ the above.
 
 ### CMake variables
 
-| Name                                        | Description                                                                | Default |
-|---------------------------------------------|----------------------------------------------------------------------------|---------|
-| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS     | Enable a large set of compiler warnings for project targets                | ON      |
-| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING | Enable security hardening features for project targets                     | ON      |
-| KATANAOPENASSETIO_ENABLE_UI_DELEGATE        | Enable 'Asset' browser - a simple text box alternative to the file browser | OFF     |
-| KATANAOPENASSETIO_ENABLE_TESTS              | Enable unit tests (additional dependencies required)                       | OFF     |
+| Name                                          | Description                                                         | Default |
+|-----------------------------------------------|---------------------------------------------------------------------|---------|
+| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS       | Enable a large set of compiler warnings for project targets         | ON      |
+| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING   | Enable security hardening features for project targets              | ON      |
+| KATANAOPENASSETIO_ENABLE_UI_DELEGATE          | Enable text box 'browser' alternative and Render node output widget | ON      |
+| KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO | Enable Startup script patching Render node 'Pre-Render' option      | ON      |
+| KATANAOPENASSETIO_ENABLE_TESTS                | Enable unit tests (additional dependencies required)                | OFF     |
 
 ## Running tests
 
@@ -177,7 +178,7 @@ This project is still work in progress.
   available.
 * Similarly, there is functionality available in OpenAssetIO that is not
   yet exposed through Katana's AssetAPI.
-* The OpenAssetIO equivalent to Katana Widget Delegates is still
+* Integration of OpenAssetIO UI delegate plugins is still
   work-in-progress, so any UI delegation desired by an asset system
   integration must be bespoke for Katana, for now.
 
