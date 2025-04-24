@@ -43,4 +43,44 @@ TEST_CASE("BAL plugin is loaded")
     CHECK_FALSE(plugin->isAssetId("notbal:///"));
 }
 
+SCENARIO("getAssetDisplayName()")
+{
+    auto plugin = assetPluginInstance();
+
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_simple_image.json"}}));
+
+    GIVEN("a valid asset ID")
+    {
+        const std::string assetId = "bal:///cat";
+
+        WHEN("display name is retrieved")
+        {
+            std::string displayName;
+            plugin->getAssetDisplayName(assetId, displayName);
+
+            THEN("display name is as the DisplayName trait's name property")
+            {
+                CHECK(displayName == "😺");
+            }
+        }
+    }
+
+    GIVEN("an invalid asset ID")
+    {
+        const std::string assetId = "notbal:///cat";
+
+        WHEN("display name is retrieved")
+        {
+            std::string displayName;
+            plugin->getAssetDisplayName(assetId, displayName);
+
+            THEN("display name is the asset ID")
+            {
+                CHECK(displayName == "notbal:///cat");
+            }
+        }
+    }
+}
+
 // NOLINTEND(*-chained-comparison)

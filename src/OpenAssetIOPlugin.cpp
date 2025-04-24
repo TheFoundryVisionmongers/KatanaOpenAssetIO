@@ -501,14 +501,23 @@ void OpenAssetIOAsset::getAssetDisplayName(const std::string& assetId, std::stri
             logger_->debugApi(logging::concatAsStr(
                 "OpenAssetIOAsset::getAssetDisplayName(assetId=", assetId, ")"));
         }
-        using openassetio::access::ResolveAccess;
-        using openassetio_mediacreation::traits::identity::DisplayNameTrait;
+        // Katana often does not check if assetId is a reference or a
+        // file path before calling this function.
+        if (const auto entityReference = manager_->createEntityReferenceIfValid(assetId))
+        {
+            using openassetio::access::ResolveAccess;
+            using openassetio_mediacreation::traits::identity::DisplayNameTrait;
 
-        const auto entityReference = manager_->createEntityReference(assetId);
-        const auto traitData = manager_->resolve(
-            entityReference, {DisplayNameTrait::kId}, ResolveAccess::kRead, context_);
+            const auto traitData = manager_->resolve(
+                *entityReference, {DisplayNameTrait::kId}, ResolveAccess::kRead, context_);
 
-        ret = DisplayNameTrait{traitData}.getName("");
+            ret = DisplayNameTrait{traitData}.getName("");
+        }
+
+        if (ret.empty())
+        {
+            ret = assetId;
+        }
 
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {
