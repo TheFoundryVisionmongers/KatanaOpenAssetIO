@@ -42,6 +42,8 @@ target_compile_definitions(
     PRIVATE
     # For appending to Geolib plugin search path.
     PLUGIN_DIR="$<TARGET_FILE_DIR:KatanaOpenAssetIOPlugin>"
+    # For dynamically loading BAL JSON libraries for each test.
+    BAL_DB_DIR="${CMAKE_CURRENT_SOURCE_DIR}/resources"
 )
 
 # Test environment -----------------------------------------------------

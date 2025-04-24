@@ -83,4 +83,110 @@ SCENARIO("getAssetDisplayName()")
     }
 }
 
+/**
+ * This test simulates the calls that LookFileMaterialsOut makes when
+ * writing a new material lookfile (.klf).
+ *
+ * The calls were determined by enabling KatanaOpenAssetIO debug
+ * logging and replicating them here.
+ */
+SCENARIO("LookFileMaterialsOut publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "",
+        "initialize",
+        {{"library_path", BAL_DB_DIR "/bal_db_LookFileMaterialsOut_publishing.json"}}));
+
+    GIVEN("an assetId")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+
+        WHEN("asset fields are retrieved, including defaults")
+        {
+            FnKat::Asset::StringMap assetFields;
+            plugin->getAssetFields(assetId, true, assetFields);
+
+            THEN("fields contain reference, name and version")
+            {
+                CHECK(assetFields.size() == 3);
+                CHECK(assetFields.at("__entityReference") == assetId);
+                CHECK(assetFields.at("name") == "Cat");
+                CHECK(assetFields.at("version") == "1");
+            }
+
+            AND_GIVEN("LookFileMaterialsOut publish args")
+            {
+                const FnKat::Asset::StringMap args{{"outputFormat", "as archive"}};
+
+                WHEN("asset creation is started")
+                {
+                    std::string inFlightAssetId;
+                    plugin->createAssetAndPath(
+                        nullptr, "look file", assetFields, args, true, inFlightAssetId);
+
+                    THEN(
+                        "in-flight asset ID is the expected preflight reference with "
+                        "manager-driven value appended")
+                    {
+                        CHECK(inFlightAssetId ==
+                              "bal:///cat#value=/some/staging/area/cat.klf");
+                    }
+
+                    AND_WHEN("in-flight reference path is resolved")
+                    {
+                        std::string managerDrivenPath;
+                        plugin->resolveAsset(inFlightAssetId, managerDrivenPath);
+
+                        THEN("path is to a staging area")
+                        {
+                            CHECK(managerDrivenPath == "/some/staging/area/cat.klf");
+                        }
+                    }
+
+                    AND_WHEN("in-flight reference fields are retrieved, excluding defaults")
+                    {
+                        FnKat::Asset::StringMap inFlightAssetFields;
+                        plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+
+                        THEN("fields contain in-flight reference, version and manager-driven path")
+                        {
+                            CHECK(inFlightAssetFields.size() == 4);
+                            CHECK(inFlightAssetFields.at("__entityReference") == "bal:///cat");
+                            CHECK(inFlightAssetFields.at("__managerDrivenValue") ==
+                                  "/some/staging/area/cat.klf");
+                            CHECK(inFlightAssetFields.at("name") == "Cat");
+                            CHECK(inFlightAssetFields.at("version") == "latest");
+                        }
+
+                        AND_WHEN("asset creation is finished")
+                        {
+                            std::string newAssetId;
+                            plugin->postCreateAsset(
+                                nullptr, "look file", inFlightAssetFields, args, newAssetId);
+
+                            THEN("new asset ID is the newly registered reference")
+                            {
+                                CHECK(newAssetId == "bal:///cat?v=2");
+                            }
+
+                            THEN("entity has been registered with the in-flight path")
+                            {
+                                FnKat::Asset::StringMap assetAttributes;
+                                plugin->getAssetAttributes(newAssetId, "", assetAttributes);
+
+                                const std::string location = assetAttributes.at(
+                                    "openassetio-mediacreation:content_LocatableContent_"
+                                    "location");
+
+                                CHECK(location == "file:///some/staging/area/cat.klf");
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
 // NOLINTEND(*-chained-comparison)

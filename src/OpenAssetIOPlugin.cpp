@@ -13,6 +13,7 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <variant>
 
@@ -22,6 +23,7 @@
 #include <FnLogging/FnLogging.h>
 #include <FnLogging/suite/FnLoggingSuite.h>
 #include <FnPluginSystem/FnPlugin.h>
+#include <pystring/pystring.h>
 
 #include <openassetio/EntityReference.hpp>
 #include <openassetio/access.hpp>
@@ -35,7 +37,6 @@
 #include <openassetio/trait/TraitsData.hpp>
 #include <openassetio/trait/property.hpp>
 #include <openassetio/typedefs.hpp>
-#include <openassetio/utils/path.hpp>
 
 #include <openassetio_mediacreation/specifications/lifecycle/EntityVersionsRelationshipSpecification.hpp>
 #include <openassetio_mediacreation/traits/content/LocatableContentTrait.hpp>
@@ -348,18 +349,32 @@ void OpenAssetIOAsset::resolveAsset(const std::string& assetId, std::string& res
         using openassetio::access::ResolveAccess;
         using openassetio_mediacreation::traits::content::LocatableContentTrait;
 
-        // We don't know anything else about the asset other than its ID at this
-        // point so attempt to resolve given only the LocatableContentTrait.
-        const auto entityReference = manager_->createEntityReference(assetId);
-        const auto traitData = manager_->resolve(
-            entityReference, {LocatableContentTrait::kId}, ResolveAccess::kRead, context_);
-        const auto url = LocatableContentTrait(traitData).getLocation();
+        auto [entityReference, managerDrivenValue] =
+            assetIdToEntityRefAndManagerDrivenValue(assetId);
 
-        if (!url)
+        if (managerDrivenValue.empty())
         {
-            throw std::runtime_error{assetId + " has no location"};
+            // We assume that Katana wants a path when it calls
+            // `resolveAsset`, which is always the case except for
+            // esoteric configurations.
+
+            const auto traitData = manager_->resolve(
+                entityReference, {LocatableContentTrait::kId}, ResolveAccess::kRead, context_);
+            const auto url = LocatableContentTrait(traitData).getLocation();
+
+            if (!url)
+            {
+                throw std::runtime_error{assetId + " has no location"};
+            }
+            resolvedAsset = fileUrlPathConverter_->pathFromUrl(*url);
         }
-        resolvedAsset = fileUrlPathConverter_.pathFromUrl(*url);
+        else
+        {
+            // If the reference contains a manager-driven value, i.e. is
+            // the result of a `createAssetAndPath()`, return that
+            // instead.
+            resolvedAsset = std::move(managerDrivenValue);
+        }
 
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {
@@ -694,7 +709,8 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
         using openassetio_mediacreation::traits::identity::DisplayNameTrait;
         using openassetio_mediacreation::traits::lifecycle::VersionTrait;
 
-        const auto entityReference = manager_->createEntityReference(assetId);
+        auto [entityReference, managerDrivenValue] =
+            assetIdToEntityRefAndManagerDrivenValue(assetId);
 
         const auto traitsData = manager_->resolve(entityReference,
                                                   {DisplayNameTrait::kId, VersionTrait::kId},
@@ -702,7 +718,11 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
                                                   context_);
 
         // Katana's AssetAPI only standardises Name & Version fields.
-        returnFields[constants::kAssetId] = assetId;
+        returnFields[constants::kEntityReference] = entityReference.toString();
+        if (!managerDrivenValue.empty())
+        {
+            returnFields[constants::kManagerDrivenValue] = std::move(managerDrivenValue);
+        }
         returnFields[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
         returnFields[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 
@@ -743,10 +763,19 @@ void OpenAssetIOAsset::buildAssetId(const StringMap& fields, std::string& ret)
 
         const std::string assetId = [&]
         {
-            // getAssetFields populates __assetId.
-            if (const auto assetIdIt = fields.find(constants::kAssetId); assetIdIt != fields.end())
+            // getAssetFields populates __entityReference.
+            if (const auto entityReferenceIt = fields.find(constants::kEntityReference);
+                entityReferenceIt != fields.end())
             {
-                return assetIdIt->second;
+                // getAssetFields may populate __managerDrivenValue.
+                if (const auto managerDrivenValueIt = fields.find(constants::kManagerDrivenValue);
+                    managerDrivenValueIt != fields.end())
+                {
+                    return pystring::join(
+                        constants::kAssetIdManagerDrivenValueSep,
+                        {entityReferenceIt->second, managerDrivenValueIt->second});
+                }
+                return entityReferenceIt->second;
             }
             throw std::runtime_error("Could not determine Asset ID from field list.");
         }();
@@ -961,7 +990,7 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
         {
             throw std::runtime_error("AssetAPI transactions not yet supported.");
         }
-        const auto assetIdIt = assetFields.find(constants::kAssetId);
+        const auto assetIdIt = assetFields.find(constants::kEntityReference);
         if (assetIdIt == assetFields.end())
         {
             throw std::runtime_error("Existing assetId not specified in publish");
@@ -983,14 +1012,52 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
         }
 
         // Indicate to the Manager we wish to publish something via preflight
-        const auto existingAssetId = manager_->createEntityReference(assetIdIt->second);
+        const auto entityReference = manager_->createEntityReference(assetIdIt->second);
 
-        assetId = manager_
-                      ->preflight(existingAssetId,
-                                  strategy.prePublishTraitData(args),
-                                  openassetio::access::PublishingAccess::kWrite,
-                                  context_)
-                      .toString();
+        const openassetio::EntityReference workingRef =
+            manager_->preflight(entityReference,
+                                strategy.prePublishTraitData(assetFields, args),
+                                openassetio::access::PublishingAccess::kWrite,
+                                context_);
+
+        assetId = workingRef.toString();
+
+        using openassetio::access::ResolveAccess;
+        using BatchElementErrorPolicyTag =
+            openassetio::hostApi::Manager::BatchElementErrorPolicyTag;
+        using openassetio::trait::TraitsDataPtr;
+        using openassetio_mediacreation::traits::content::LocatableContentTrait;
+
+        // In almost all cases, Katana will immediately pass `assetId`
+        // to `resolveAsset()` and expect a file path to be returned.
+        //
+        // Since the imminent `resolveAsset()` call will not communicate
+        // that it wants a writeable path, and the subsequent
+        // `postCreateAsset()` call will not be told which path was
+        // used, we preempt this workflow by resolving for
+        // `kManagerDriven` here and encode it in the reference itself,
+        // so it's available for use in these subsequent steps.
+        //
+        // It is a little ambiguous in the docs whether `resolve()`
+        // should error for an unsupported `kManagerDriven` query, or if
+        // it should just leave the offending trait unset in the result.
+        // So use the kVariant tag just in case, so we can ignore any
+        // errors.
+        const auto maybeTraitsData = manager_->resolve(workingRef,
+                                                       {LocatableContentTrait::kId},
+                                                       ResolveAccess::kManagerDriven,
+                                                       context_,
+                                                       BatchElementErrorPolicyTag::kVariant);
+
+        if (const auto* traitsData = std::get_if<TraitsDataPtr>(&maybeTraitsData))
+        {
+            if (const auto url = LocatableContentTrait(*traitsData).getLocation())
+            {
+                const std::string managerDrivenValue = fileUrlPathConverter_->pathFromUrl(*url);
+                assetId = pystring::join(constants::kAssetIdManagerDrivenValueSep,
+                                         {assetId, managerDrivenValue});
+            }
+        }
 
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {
@@ -1033,7 +1100,7 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
             throw std::runtime_error("AssetAPI transactions not yet supported.");
         }
         // getAssetFields re-populates this with our working entity reference.
-        const auto assetIdIt = assetFields.find(constants::kAssetId);
+        const auto assetIdIt = assetFields.find(constants::kEntityReference);
         if (assetIdIt == assetFields.cend())
         {
             throw std::runtime_error("Working EntityReference not specified in post-publish");
@@ -1052,7 +1119,7 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
 
         assetId = manager_
                       ->register_(workingEntityReference.value(),
-                                  strategy.postPublishTraitData(args),
+                                  strategy.postPublishTraitData(assetFields, args),
                                   openassetio::access::PublishingAccess::kWrite,
                                   context_)
                       .toString();
@@ -1072,6 +1139,17 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
         }
         throw;
     }
+}
+
+std::pair<openassetio::EntityReference, std::string>
+OpenAssetIOAsset::assetIdToEntityRefAndManagerDrivenValue(const std::string& assetId) const
+{
+    auto assetIdAndManagerDrivenValue =
+        pystring::rsplit(assetId, constants::kAssetIdManagerDrivenValueSep, 1);
+
+    return {manager_->createEntityReference(std::move(assetIdAndManagerDrivenValue.front())),
+            assetIdAndManagerDrivenValue.size() > 1 ? std::move(assetIdAndManagerDrivenValue.back())
+                                                    : ""};
 }
 
 // --- Register plugin ------------------------
