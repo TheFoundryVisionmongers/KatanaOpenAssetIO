@@ -129,8 +129,7 @@ SCENARIO("LookFileMaterialsOut publishing")
                         "in-flight asset ID is the expected preflight reference with "
                         "manager-driven value appended")
                     {
-                        CHECK(inFlightAssetId ==
-                              "bal:///cat#value=/some/staging/area/cat.klf");
+                        CHECK(inFlightAssetId == "bal:///cat#value=/some/staging/area/cat.klf");
                     }
 
                     AND_WHEN("in-flight reference path is resolved")
@@ -189,4 +188,112 @@ SCENARIO("LookFileMaterialsOut publishing")
     }
 }
 
+/**
+ * This test simulates the calls made when performing a 'Disk Render'
+ * via the Render node, assuming the user selects 'Pre-Render Publish
+ * Asset', then 'Disk Render', then 'Post-Render Publish Asset'.
+ *
+ * This assumes that the KatanaOpenAssetIO patches are applied (i.e.
+ * that the plugin script `KatanaOpenAssetIOPatches.py` is installed).
+ *
+ * The calls were determined by enabling KatanaOpenAssetIO debug
+ * logging and performing the actions manually.
+ *
+ * We do not distinguish between 'Pre-'/'Post-Render Publish Asset' and
+ * 'Pre-'/'Post-Render Publish Asset (Version Up)' menu options.
+ * - If the user is explicitly publishing then we expect that they want
+ *   to notify the asset manager of a potential new version.
+ * - If the user wants to overwrite an in-flight render, they can do
+ *   this as many times as they like before hitting 'Post-Render Publish
+ *   Asset'.
+ * - If the user wants to overwrite a previously published render, they
+ *   can simply avoid clicking 'Pre-Render Publish Asset'.
+ */
+SCENARIO("Render node publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_Render_publishing.json"}}));
+
+    GIVEN("an assetId")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+
+        WHEN("asset fields are retrieved, including defaults")
+        {
+            FnKat::Asset::StringMap assetFields;
+            plugin->getAssetFields(assetId, true, assetFields);
+
+            AND_GIVEN("Render pre-publish args")
+            {
+                const FnKat::Asset::StringMap preArgs{
+                    {"colorspace", "linear"},
+                    {"ext", "deepexr"},
+                    {"filePathTemplate", "/some/permanent/storage/cat.v1.exr"},
+                    {"locationSettings.renderLocation", "bal:///cat?v=1"},
+                    {"outputName", "deep"},
+                    {"res", "square_512"},
+                    {"view", ""}};
+
+                WHEN("asset creation is started")
+                {
+                    std::string inFlightAssetId;
+                    plugin->createAssetAndPath(
+                        nullptr, "image", assetFields, preArgs, true, inFlightAssetId);
+
+                    THEN(
+                        "in-flight asset ID is the expected preflight reference with "
+                        "manager-driven value appended")
+                    {
+                        CHECK(inFlightAssetId ==
+                              "bal:///cat#value=/some/staging/area/cat.####.exr");
+                    }
+
+                    AND_WHEN("in-flight reference fields are retrieved, including defaults")
+                    {
+                        FnKat::Asset::StringMap inFlightAssetFields;
+                        plugin->getAssetFields(inFlightAssetId, true, inFlightAssetFields);
+
+                        AND_GIVEN("Render post-publish args")
+                        {
+                            const FnKat::Asset::StringMap postArgs{
+                                {"colorspace", "linear"},
+                                {"ext", "deepexr"},
+                                {"filePathTemplate", "/some/staging/area/cat.####.exr"},
+                                {"locationSettings", ""},
+                                {"outputName", "deep"},
+                                {"res", "square_512"},
+                                {"view", ""}};
+
+                            WHEN("asset creation is finished")
+                            {
+                                std::string newAssetId;
+                                plugin->postCreateAsset(
+                                    nullptr, "image", inFlightAssetFields, postArgs, newAssetId);
+
+                                THEN("new asset ID is the newly registered reference")
+                                {
+                                    CHECK(newAssetId == "bal:///cat?v=2");
+                                }
+
+                                THEN("entity has been registered with the in-flight path")
+                                {
+                                    FnKat::Asset::StringMap assetAttributes;
+                                    plugin->getAssetAttributes(newAssetId, "", assetAttributes);
+
+                                    const std::string location = assetAttributes.at(
+                                        "openassetio-mediacreation:content_LocatableContent_"
+                                        "location");
+
+                                    CHECK(location ==
+                                          "file:///some/staging/area/cat.%23%23%23%23.exr");
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 // NOLINTEND(*-chained-comparison)
