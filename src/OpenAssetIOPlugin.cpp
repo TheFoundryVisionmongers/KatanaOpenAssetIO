@@ -4,6 +4,7 @@
 #include "OpenAssetIOAsset.hpp"
 
 #include <algorithm>
+#include <cstdint>
 #include <cstdlib>
 #include <exception>
 #include <ios>
@@ -945,16 +946,19 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
     {
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {
-            logger_->debugApi(
-                logging::concatAsStr("OpenAssetIOAsset::createAssetAndPath(assetType=",
-                                     assetType,
-                                     ", assetFields=",
-                                     assetFields,
-                                     ", args=",
-                                     args,
-                                     ", createDirectory=",
-                                     createDirectory,
-                                     ")"));
+            logger_->debugApi(logging::concatAsStr("OpenAssetIOAsset::createAssetAndPath(",
+                                                   "txn=",
+                                                   // NOLINTNEXTLINE(*-pro-type-reinterpret-cast)
+                                                   reinterpret_cast<std::uintptr_t>(txn),
+                                                   ", assetType=",
+                                                   assetType,
+                                                   ", assetFields=",
+                                                   assetFields,
+                                                   ", args=",
+                                                   args,
+                                                   ", createDirectory=",
+                                                   createDirectory,
+                                                   ")"));
         }
         // `assetFields` comes from `getAssetFields`, with no mutations.
         //
@@ -986,10 +990,6 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
 
         (void)createDirectory;  // TODO(DF): kCreateRelated?
 
-        if (txn != nullptr)
-        {
-            throw std::runtime_error("AssetAPI transactions not yet supported.");
-        }
         const auto assetIdIt = assetFields.find(constants::kEntityReference);
         if (assetIdIt == assetFields.end())
         {
@@ -1087,17 +1087,18 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
     {
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {
-            logger_->debugApi(logging::concatAsStr("OpenAssetIOAsset::postCreateAsset(assetType=",
-                                                   assetType,
-                                                   ", assetFields=",
-                                                   assetFields,
-                                                   ", args=",
-                                                   args,
-                                                   ")"));
-        }
-        if (txn != nullptr)
-        {
-            throw std::runtime_error("AssetAPI transactions not yet supported.");
+            logger_->debugApi(
+                logging::concatAsStr("OpenAssetIOAsset::postCreateAsset("
+                                     "txn=",
+                                     // NOLINTNEXTLINE(*-pro-type-reinterpret-cast)
+                                     reinterpret_cast<std::uintptr_t>(txn),
+                                     ", assetType=",
+                                     assetType,
+                                     ", assetFields=",
+                                     assetFields,
+                                     ", args=",
+                                     args,
+                                     ")"));
         }
         // getAssetFields re-populates this with our working entity reference.
         const auto assetIdIt = assetFields.find(constants::kEntityReference);
