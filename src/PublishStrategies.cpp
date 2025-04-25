@@ -29,6 +29,20 @@ PublishStrategy::PublishStrategy(FileUrlPathConverterPtr fileUrlPathConverter)
 
 namespace
 {
+
+using openassetio::trait::TraitsDataPtr;
+using openassetio_mediacreation::specifications::application::WorkfileSpecification;
+
+/**
+ * Generic publishing strategy.
+ *
+ * Imbues the trait set of the templated Specification.
+ *
+ * Also sets the LocatableContentTrait location to the path from the
+ * manager driven value encoded in the asset ID, if present.
+ *
+ * @tparam T OpenAssetIO Specification to imbue.
+ */
 template <typename T>
 struct MediaCreationPublishStrategy : PublishStrategy
 {
@@ -39,7 +53,14 @@ struct MediaCreationPublishStrategy : PublishStrategy
         return T::kTraitSet;
     }
 
-    [[nodiscard]] openassetio::trait::TraitsDataPtr prePublishTraitData(
+    /**
+     * Retrieve the trait data to be passed to `preflight()`.
+     *
+     * @param fields Dictionary from `getAssetFields()`.
+     *
+     * @param args Dictionary of args passed to `createAssetAndPath()`.
+     */
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         const FnKat::Asset::StringMap& fields,
         const FnKat::Asset::StringMap& args) const override
@@ -51,7 +72,14 @@ struct MediaCreationPublishStrategy : PublishStrategy
         return specification.traitsData();
     }
 
-    [[nodiscard]] openassetio::trait::TraitsDataPtr postPublishTraitData(
+    /**
+     * Retrieve the trait data to be passed to `register()`.
+     *
+     * @param fields Dictionary from `getAssetFields()`.
+     *
+     * @param args Dictionary of args passed to `postCreateAsset()`.
+     */
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         const FnKat::Asset::StringMap& fields,
         const FnKat::Asset::StringMap& args) const override
@@ -73,9 +101,58 @@ struct MediaCreationPublishStrategy : PublishStrategy
     }
 };
 
+/**
+ * Publish strategy for Katana LookFiles.
+ *
+ * These can be published either as a .klf archive, or as a directory
+ * containing per-pass .klf and .attr files. So we disambiguate by
+ * making use of the MIME type on the published LocatableContent trait.
+ */
+struct LookfileAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(args, traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(args, traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const FnKat::Asset::StringMap& args, const TraitsDataPtr& traitsData)
+    {
+        if (const auto keyAndValue = args.find("outputFormat"); keyAndValue != cend(args))
+        {
+            if (keyAndValue->second == "as directory")
+            {
+                WorkfileSpecification{traitsData}.locatableContentTrait().setMimeType(
+                    "inode/directory");  // From xdg/shared-mime-info
+            }
+            else if (keyAndValue->second == "as archive")
+            {
+                WorkfileSpecification{traitsData}.locatableContentTrait().setMimeType(
+                    "application/vnd.foundry.katana.lookfile");  // Invented
+            }
+        }
+    }
+};
+
 // Utility declarations
-using WorkfileAssetPublisher = MediaCreationPublishStrategy<
-    openassetio_mediacreation::specifications::application::WorkfileSpecification>;
+using WorkfileAssetPublisher = MediaCreationPublishStrategy<WorkfileSpecification>;
 
 using ImageAssetPublisher =
     MediaCreationPublishStrategy<openassetio_mediacreation::specifications::twoDimensional::
@@ -104,7 +181,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeImage] = std::make_unique<ImageAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFile] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<LookfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFileMgrSettings] =
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeAlembic] =

@@ -225,7 +225,7 @@ SCENARIO("LookFileMaterialsOut publishing")
                 CHECK(assetFields.at("version") == "1");
             }
 
-            AND_GIVEN("LookFileMaterialsOut publish args")
+            AND_GIVEN("LookFileMaterialsOut publish as archive args")
             {
                 const FnKat::Asset::StringMap args{{"outputFormat", "as archive"}};
 
@@ -279,16 +279,63 @@ SCENARIO("LookFileMaterialsOut publishing")
                                 CHECK(newAssetId == "bal:///cat?v=2");
                             }
 
-                            THEN("entity has been registered with the in-flight path")
+                            THEN("entity has been registered with expected traits")
+                            {
+                                FnKat::Asset::StringMap actual;
+                                plugin->getAssetAttributes(newAssetId, "", actual);
+
+                                const FnKat::Asset::StringMap expected = {
+                                    {"openassetio-mediacreation:usage,Entity", ""},
+                                    {"openassetio-mediacreation:application,Work", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version,specifiedTag",
+                                     "2"},
+                                    {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                                    {"openassetio-mediacreation:content,LocatableContent", ""},
+                                    {"openassetio-mediacreation:content,LocatableContent,location",
+                                     "file:///some/staging/area/cat.klf"},
+                                    {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                                     "application/vnd.foundry.katana.lookfile"}};
+
+                                CHECK(actual == expected);
+                            }
+                        }
+                    }
+                }
+            }
+
+            AND_GIVEN("LookFileMaterialsOut publish as directory args")
+            {
+                const FnKat::Asset::StringMap args{{"outputFormat", "as directory"}};
+
+                WHEN("asset creation is started")
+                {
+                    std::string inFlightAssetId;
+                    // TODO(DF): Need a way to validate the parameters passed to `preflight()`.
+                    plugin->createAssetAndPath(
+                        nullptr, "look file", assetFields, args, true, inFlightAssetId);
+
+                    AND_WHEN("in-flight reference fields are retrieved, excluding defaults")
+                    {
+                        FnKat::Asset::StringMap inFlightAssetFields;
+                        plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+
+                        AND_WHEN("asset creation is finished")
+                        {
+                            std::string newAssetId;
+                            plugin->postCreateAsset(
+                                nullptr, "look file", inFlightAssetFields, args, newAssetId);
+
+                            THEN("entity has been registered with directory MIME type")
                             {
                                 FnKat::Asset::StringMap assetAttributes;
                                 plugin->getAssetAttributes(newAssetId, "", assetAttributes);
 
-                                const std::string location = assetAttributes.at(
+                                const std::string mimeType = assetAttributes.at(
                                     "openassetio-mediacreation:content,LocatableContent,"
-                                    "location");
+                                    "mimeType");
 
-                                CHECK(location == "file:///some/staging/area/cat.klf");
+                                CHECK(mimeType == "inode/directory");
                             }
                         }
                     }

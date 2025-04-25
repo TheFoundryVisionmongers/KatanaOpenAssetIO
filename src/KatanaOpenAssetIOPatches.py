@@ -78,10 +78,10 @@ def PostCreateProductAndLocation(node, idx, versionup, assetTxn=None):
         # Output is not an asset ID.
         return None
 
-    output_name = output_info["outputName"]
-    preflight_param = node.getParameter("outputs.preflight")
-    if output_param := preflight_param.getChild(output_name):
-        preflight_param.deleteChild(output_param)
+    if preflight_param := node.getParameter("outputs.preflight"):
+        output_name = output_info["outputName"]
+        if output_param := preflight_param.getChild(output_name):
+            preflight_param.deleteChild(output_param)
 
     return output_info
 
