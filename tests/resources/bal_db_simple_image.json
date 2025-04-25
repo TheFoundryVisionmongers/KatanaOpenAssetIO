@@ -1,0 +1,22 @@
+{
+  "entities": {
+    "cat": {
+      "versions": [
+        {
+          "traits": {
+            "openassetio-mediacreation:usage.Entity": {},
+            "openassetio-mediacreation:twoDimensional.Image": {},
+            "openassetio-mediacreation:identity.DisplayName": {
+              "name": "😺",
+              "qualifiedName": "a/cat"
+            },
+            "openassetio-mediacreation:content.LocatableContent": {
+              "location": "file:///some/permanent/storage/cat.v1.%23%23.exr",
+              "isTemplated": true
+            }
+          }
+        }
+      ]
+    }
+  }
+}

@@ -106,7 +106,7 @@ struct KatanaLoggerInterface final : openassetio::log::LoggerInterface
     }
 };
 
-constexpr char kAssetFieldKeySep = '_';
+constexpr char kAssetFieldKeySep = ',';
 constexpr auto kDisablePythonEnvVar = "KATANAOPENASSETIO_DISABLE_PYTHON";
 
 using Severity = openassetio::log::LoggerInterface::Severity;
@@ -857,16 +857,32 @@ void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
             manager_->resolve(entityReference, traitSet, ResolveAccess::kRead, context_);
 
         // TODO(DH): Determine alternative way to surface traits to Katana?
-        for (const auto& traitId : traitsData->traitSet())
+
+        // Convert the traits to a StringMap. Retain traits with no
+        // properties, so that the trait set can be determined
+        // externally, even if the trait has no resolvable properties.
+        for (const auto& traitId : traitSet)
         {
+            // Note that Katana will use the StringMap keys as keys for
+            // building a GroupAttribute, which means `.` has special
+            // meaning (nesting). Katana will then parse the
+            // GroupAttribute back to a flat StringMap, losing any
+            // nested elements. So we must ensure no `.`s in the key.
+            // Here we (somewhat arbitrarily) use `,` instead as the key
+            // separator.
+            std::string attrKey = traitId;
+            replace(begin(attrKey), end(attrKey), '.', kAssetFieldKeySep);
+            returnAttrs[std::move(attrKey)] = "";
+
+            // Add any available (i.e. resolvable) properties for this
+            // trait.
             for (const auto& traitPropertyKey : traitsData->traitPropertyKeys(traitId))
             {
                 openassetio::trait::property::Value value;
                 traitsData->getTraitProperty(&value, traitId, traitPropertyKey);
-                std::string attrKey = traitId;
+                attrKey = traitId;
                 attrKey += kAssetFieldKeySep;
                 attrKey += traitPropertyKey;
-                // For safe use to index GroupAttributes.
                 replace(begin(attrKey), end(attrKey), '.', kAssetFieldKeySep);
 
                 std::visit(

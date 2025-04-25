@@ -1,27 +1,48 @@
 // KatanaOpenAssetIO
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 The Foundry Visionmongers Ltd
+#include <cstddef>
 #include <memory>
+#include <ostream>
+#include <string>
+#include <tuple>
+#include <utility>
+
 #include <catch2/catch_test_macros.hpp>
 
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
+#include <FnAttribute/FnAttribute.h>
+#include <FnAttribute/FnAttributeBase.h>
+#include <FnAttribute/suite/FnAttributeSuite.h>
 #include <FnPluginManager/FnPluginManager.h>
 
-// Disable checks triggered by Catch2 macros.
-// NOLINTBEGIN(*-chained-comparison)
-namespace
+namespace std
 {
 /**
- * Get an Asset base class reference from the KatanaOpenAssetIO plugin.
- *
- * Get the plugin from the plugin cache and create an instance.
+ * Make StringMap printable in Catch2 assertion macro failure output.
+ */
+// NOLINTNEXTLINE(*-use-internal-linkage)
+std::ostream& operator<<(std::ostream& ostr, const std::pair<std::string, std::string>& value)
+{
+    // Double-newline to break up output, since we're using pre-compiled
+    // Catch2, where CATCH_CONFIG_CONSOLE_WIDTH=80 by default.
+    ostr << "\n\n  '" << value.first << "' = '" << value.second << "'";
+    return ostr;
+}
+}  // namespace std
+
+namespace
+{
+/*
+ * Get an Asset base class instance, as well as the C suite and handle
+ * that wrap it, from the KatanaOpenAssetIO plugin.
  *
  * Return a shared_ptr with a custom deleter that uses the C AssetAPI
  * function pointer suite's `destroy` function to ensure proper cleanup
  * of the instance created by the plugin system.
  */
-auto assetPluginInstance()
+auto assetPluginInstanceAndSuiteAndHandle()
 {
     auto* pluginHandle = FnKat::PluginManager::getPlugin("KatanaOpenAssetIO", "AssetPlugin", 1);
     const auto* pluginSuite = FnKat::PluginManager::getPluginSuite(pluginHandle);
@@ -29,12 +50,26 @@ auto assetPluginInstance()
 
     FnAssetHandle instanceHandle = assetSuite->create();
 
-    return std::shared_ptr<FnKat::Asset>{
+    std::shared_ptr<FnKat::Asset> instance{
         &instanceHandle->getAsset(),
         [destroy = assetSuite->destroy, instanceHandle]([[maybe_unused]] FnKat::Asset*)
         { destroy(instanceHandle); }};
+
+    return std::tuple{std::move(instance), assetSuite, instanceHandle};
+}
+
+/**
+ * Get an Asset base class instance from the KatanaOpenAssetIO plugin.
+ */
+auto assetPluginInstance()
+{
+    auto [instance, assetSuite, instanceHandle] = assetPluginInstanceAndSuiteAndHandle();
+    return instance;
 }
 }  // namespace
+
+// Disable checks triggered by Catch2 macros.
+// NOLINTBEGIN(*-chained-comparison,*-function-cognitive-complexity,*-container-size-empty)
 
 TEST_CASE("BAL plugin is loaded")
 {
@@ -78,6 +113,81 @@ SCENARIO("getAssetDisplayName()")
             THEN("display name is the asset ID")
             {
                 CHECK(displayName == "notbal:///cat");
+            }
+        }
+    }
+}
+
+/**
+ * Check that the getAssetAttributes function returns the expected
+ * values and that the C API reflects those values.
+ *
+ * We must check the C API because it returns a GroupAttribute rather
+ * than a StringMap.
+ *
+ * When reading/writing an element in a GroupAttribute, `.`s in the key
+ * are a shorthand for referencing a nested element.
+ *
+ * The Asset API within Katana (e.g. in the Python console) transforms
+ * the GroupAttribute back to a flat dictionary, losing any nested
+ * elements.
+ *
+ * So we cannot have `.`s in our attribute names.
+ *
+ * An exception is the DefaultAssetPlugin API. It instead encodes the
+ * entire StringMap as a single StringAttribute, so `.`s in the key are
+ * kept verbatim.
+ */
+SCENARIO("getAssetAttributes()")
+{
+    auto [plugin, suite, handle] = assetPluginInstanceAndSuiteAndHandle();
+
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_simple_image.json"}}));
+
+    WHEN("asset attributes retrieved from plugin C++ API")
+    {
+        FnKat::Asset::StringMap attrsAsStringMap;
+        plugin->getAssetAttributes("bal:///cat", "", attrsAsStringMap);
+
+        THEN("asset attributes have expected values")
+        {
+            const FnKat::Asset::StringMap expected = {
+                {"openassetio-mediacreation:usage,Entity", ""},
+                {"openassetio-mediacreation:twoDimensional,Image", ""},
+                {"openassetio-mediacreation:identity,DisplayName", ""},
+                {"openassetio-mediacreation:identity,DisplayName,name", "😺"},
+                {"openassetio-mediacreation:identity,DisplayName,qualifiedName", "a/cat"},
+                {"openassetio-mediacreation:content,LocatableContent", ""},
+                {"openassetio-mediacreation:content,LocatableContent,location",
+                 "file:///some/permanent/storage/cat.v1.%23%23.exr"},
+                {"openassetio-mediacreation:content,LocatableContent,isTemplated", "true"},
+                {"openassetio-mediacreation:lifecycle,Version", ""},
+                {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "latest"},
+                {"openassetio-mediacreation:lifecycle,Version,stableTag", "1"}};
+            CHECK(attrsAsStringMap == expected);
+        }
+
+        AND_WHEN("asset attributes are retrieved through the C API")
+        {
+            FnAttributeHandle errorMessage = nullptr;
+            FnAttributeHandle attrsAsGroupAttrHandle =
+                suite->getAssetAttributes(handle, "bal:///cat", "", &errorMessage);
+            const FnAttribute::GroupAttribute attrsAsGroupAttr =
+                FnAttribute::Attribute::CreateAndSteal(attrsAsGroupAttrHandle);
+
+            THEN("plugin and C API match")
+            {
+                constexpr std::size_t kExpectedNumAttrs = 11;
+                CHECK(attrsAsGroupAttr.getNumberOfChildren() == kExpectedNumAttrs);
+
+                for (const auto& [key, value] : attrsAsStringMap)
+                {
+                    const FnAttribute::StringAttribute expectedValue{value};
+                    const FnAttribute::StringAttribute actualValue =
+                        attrsAsGroupAttr.getChildByName(key);
+                    CHECK(actualValue == expectedValue);
+                }
             }
         }
     }
@@ -175,7 +285,7 @@ SCENARIO("LookFileMaterialsOut publishing")
                                 plugin->getAssetAttributes(newAssetId, "", assetAttributes);
 
                                 const std::string location = assetAttributes.at(
-                                    "openassetio-mediacreation:content_LocatableContent_"
+                                    "openassetio-mediacreation:content,LocatableContent,"
                                     "location");
 
                                 CHECK(location == "file:///some/staging/area/cat.klf");
@@ -282,7 +392,7 @@ SCENARIO("Render node publishing")
                                     plugin->getAssetAttributes(newAssetId, "", assetAttributes);
 
                                     const std::string location = assetAttributes.at(
-                                        "openassetio-mediacreation:content_LocatableContent_"
+                                        "openassetio-mediacreation:content,LocatableContent,"
                                         "location");
 
                                     CHECK(location ==
@@ -296,4 +406,4 @@ SCENARIO("Render node publishing")
         }
     }
 }
-// NOLINTEND(*-chained-comparison)
+// NOLINTEND(*-chained-comparison,*-function-cognitive-complexity,*-container-size-empty)
