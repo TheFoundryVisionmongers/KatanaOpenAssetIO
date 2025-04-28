@@ -9,6 +9,7 @@
 #include <utility>
 
 #include <catch2/catch_test_macros.hpp>
+#include <catch2/generators/catch_generators.hpp>
 
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
@@ -433,20 +434,182 @@ SCENARIO("Render node publishing")
                                     CHECK(newAssetId == "bal:///cat?v=2");
                                 }
 
-                                THEN("entity has been registered with the in-flight path")
+                                THEN("entity has been registered with expected traits")
                                 {
-                                    FnKat::Asset::StringMap assetAttributes;
-                                    plugin->getAssetAttributes(newAssetId, "", assetAttributes);
+                                    FnKat::Asset::StringMap actual;
+                                    plugin->getAssetAttributes(newAssetId, "", actual);
 
-                                    const std::string location = assetAttributes.at(
-                                        "openassetio-mediacreation:content,LocatableContent,"
-                                        "location");
+                                    const FnKat::Asset::StringMap expected = {
+                                        {"openassetio-mediacreation:usage,Entity", ""},
+                                        {"openassetio-mediacreation:twoDimensional,Image", ""},
+                                        {"openassetio-mediacreation:twoDimensional,PixelBased", ""},
+                                        {"openassetio-mediacreation:twoDimensional,Deep", ""},
+                                        {"openassetio-mediacreation:lifecycle,Version", ""},
+                                        {"openassetio-mediacreation:lifecycle,Version,specifiedTag",
+                                         "2"},
+                                        {"openassetio-mediacreation:lifecycle,Version,stableTag",
+                                         "2"},
+                                        {"openassetio-mediacreation:identity,DisplayName", ""},
+                                        {"openassetio-mediacreation:identity,DisplayName,name",
+                                         "deep"},
+                                        {"openassetio-mediacreation:identity,DisplayName,"
+                                         "qualifiedName",
+                                         "deep"},
+                                        {"openassetio-mediacreation:color,OCIOColorManaged", ""},
+                                        {"openassetio-mediacreation:color,OCIOColorManaged,"
+                                         "colorspace",
+                                         "linear"},
+                                        {"openassetio-mediacreation:content,LocatableContent", ""},
+                                        {"openassetio-mediacreation:content,LocatableContent,"
+                                         "location",
+                                         "file:///some/staging/area/cat.%23%23%23%23.exr"},
+                                        {"openassetio-mediacreation:content,LocatableContent,"
+                                         "mimeType",
+                                         "image/x-exr"}};
 
-                                    CHECK(location ==
-                                          "file:///some/staging/area/cat.%23%23%23%23.exr");
+                                    CHECK(actual == expected);
                                 }
                             }
                         }
+
+                        AND_GIVEN("alternative Render post-publish args")
+                        {
+                            const FnKat::Asset::StringMap postArgs{{"colorspace", "sRGB"},
+                                                                   {"ext", "png"},
+                                                                   {"outputName", "other name"}};
+
+                            WHEN("asset creation is finished")
+                            {
+                                std::string newAssetId;
+                                plugin->postCreateAsset(
+                                    nullptr, "image", inFlightAssetFields, postArgs, newAssetId);
+
+                                THEN("registered entity's trait properties have alternative values")
+                                {
+                                    FnKat::Asset::StringMap actual;
+                                    plugin->getAssetAttributes(newAssetId, "", actual);
+
+                                    FnKat::Asset::StringMap expected = {
+                                        {"openassetio-mediacreation:identity,DisplayName,name",
+                                         "other name"},
+                                        {"openassetio-mediacreation:identity,DisplayName,"
+                                         "qualifiedName",
+                                         "other name"},
+                                        {"openassetio-mediacreation:color,OCIOColorManaged,"
+                                         "colorspace",
+                                         "sRGB"},
+                                        {"openassetio-mediacreation:content,LocatableContent,"
+                                         "mimeType",
+                                         "image/png"}};
+
+                                    // `merge()` doesn't overwrite.
+                                    expected.merge(FnKat::Asset::StringMap{actual});
+
+                                    CHECK(actual == expected);
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            AND_GIVEN("unsupported file extension in args")
+            {
+                const FnKat::Asset::StringMap postArgs{{"ext", "some_unsupported_ext"}};
+
+                WHEN("asset is published")
+                {
+                    std::string newAssetId;
+                    plugin->postCreateAsset(nullptr, "image", assetFields, postArgs, newAssetId);
+
+                    THEN("MIME type is unavailable")
+                    {
+                        FnKat::Asset::StringMap attrs;
+                        plugin->getAssetAttributes(newAssetId, "", attrs);
+
+                        CHECK(attrs.count("openassetio-mediacreation:content,LocatableContent,"
+                                          "mimeType") == 0);
+                    }
+                }
+            }
+
+            AND_GIVEN("supported file extension in args")
+            {
+                using P = std::pair<std::string, std::string>;
+
+                const P extAndMIME =
+                    GENERATE(P{"exr", "image/x-exr"},
+                             P{"deepexr", "image/x-exr"},
+                             P{"tif", "image/tiff"},
+                             P{"png", "image/png"},
+                             P{"jpg", "image/jpeg"},
+                             P{"rla", "image/x-rla"},
+                             P{"dtex", "image/x-dtex"},
+                             P{"deepshad", "image/x-deepshad"},
+                             P{"hist", "application/vnd.foundry.katana.histogram+xml"});
+
+                const FnKat::Asset::StringMap postArgs{
+                    {"ext", extAndMIME.first},
+                };
+
+                WHEN("asset is published")
+                {
+                    std::string newAssetId;
+                    plugin->postCreateAsset(nullptr, "image", assetFields, postArgs, newAssetId);
+
+                    THEN("MIME type is as expected")
+                    {
+                        FnKat::Asset::StringMap attrs;
+                        plugin->getAssetAttributes(newAssetId, "", attrs);
+
+                        CHECK(attrs.at("openassetio-mediacreation:content,LocatableContent,"
+                                       "mimeType") == extAndMIME.second);
+                    }
+                }
+            }
+
+            AND_GIVEN("deep file extension in args")
+            {
+                const std::string ext = GENERATE("deepexr", "dtex", "deepshad");
+
+                const FnKat::Asset::StringMap postArgs{
+                    {"ext", ext},
+                };
+
+                WHEN("asset is published")
+                {
+                    std::string newAssetId;
+                    plugin->postCreateAsset(nullptr, "image", assetFields, postArgs, newAssetId);
+
+                    THEN("DeepTrait is imbued")
+                    {
+                        FnKat::Asset::StringMap attrs;
+                        plugin->getAssetAttributes(newAssetId, "", attrs);
+
+                        CHECK(attrs.count("openassetio-mediacreation:twoDimensional,Deep") == 1);
+                    }
+                }
+            }
+
+            AND_GIVEN("non-deep file extension in args")
+            {
+                const std::string ext = GENERATE("exr", "tif", "png", "jpg", "rla", "hist");
+
+                const FnKat::Asset::StringMap postArgs{
+                    {"ext", ext},
+                };
+
+                WHEN("asset is published")
+                {
+                    std::string newAssetId;
+                    plugin->postCreateAsset(nullptr, "image", assetFields, postArgs, newAssetId);
+
+                    THEN("DeepTrait is not imbued")
+                    {
+                        FnKat::Asset::StringMap attrs;
+                        plugin->getAssetAttributes(newAssetId, "", attrs);
+
+                        CHECK(attrs.count("openassetio-mediacreation:twoDimensional,Deep") == 0);
                     }
                 }
             }

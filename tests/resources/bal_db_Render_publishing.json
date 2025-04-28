@@ -17,7 +17,6 @@
         {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:twoDimensional.Deep": {},
             "openassetio-mediacreation:twoDimensional.Image": {},
             "openassetio-mediacreation:twoDimensional.PixelBased": {},
             "openassetio-mediacreation:content.LocatableContent": {
@@ -31,7 +30,6 @@
         "write": {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:twoDimensional.Deep": {},
             "openassetio-mediacreation:twoDimensional.Image": {},
             "openassetio-mediacreation:twoDimensional.PixelBased": {},
             "openassetio-mediacreation:content.LocatableContent": {}

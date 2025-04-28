@@ -4,6 +4,7 @@
 #include "PublishStrategies.hpp"
 
 #include <memory>
+#include <set>
 #include <stdexcept>
 #include <string>
 #include <utility>
@@ -18,7 +19,11 @@
 #include <openassetio_mediacreation/specifications/threeDimensional/SceneGeometryResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/threeDimensional/SceneLightingResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/threeDimensional/ShaderResourceSpecification.hpp>
-#include <openassetio_mediacreation/specifications/twoDimensional/DeepBitmapImageResourceSpecification.hpp>
+#include <openassetio_mediacreation/specifications/twoDimensional/BitmapImageResourceSpecification.hpp>
+#include <openassetio_mediacreation/traits/color/OCIOColorManagedTrait.hpp>
+#include <openassetio_mediacreation/traits/content/LocatableContentTrait.hpp>
+#include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
+#include <openassetio_mediacreation/traits/twoDimensional/DeepTrait.hpp>
 
 #include "constants.hpp"
 
@@ -32,6 +37,11 @@ namespace
 
 using openassetio::trait::TraitsDataPtr;
 using openassetio_mediacreation::specifications::application::WorkfileSpecification;
+using openassetio_mediacreation::specifications::twoDimensional::BitmapImageResourceSpecification;
+using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
+using openassetio_mediacreation::traits::content::LocatableContentTrait;
+using openassetio_mediacreation::traits::identity::DisplayNameTrait;
+using openassetio_mediacreation::traits::twoDimensional::DeepTrait;
 
 /**
  * Generic publishing strategy.
@@ -151,12 +161,83 @@ private:
     }
 };
 
+/**
+ * Publish strategy for images.
+ */
+struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        updateTraitsFromArgs(args, traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        updateTraitsFromArgs(args, traitsData);
+        return traitsData;
+    }
+
+private:
+    static inline const FnKat::Asset::StringMap kExtToMimeMap{
+        {"exr", "image/x-exr"},                                    // From xdg/shared-mime-info
+        {"deepexr", "image/x-exr"},                                // Assume same as .exr
+        {"png", "image/png"},                                      // From iana.org
+        {"tif", "image/tiff"},                                     // From iana.org
+        {"jpg", "image/jpeg"},                                     // From iana.org
+        {"rla", "image/x-rla"},                                    // Unofficial
+        {"dtex", "image/x-dtex"},                                  // Invented
+        {"deepshad", "image/x-deepshad"},                          // Invented
+        {"hist", "application/vnd.foundry.katana.histogram+xml"},  // Invented
+    };
+    static inline const std::set<std::string> kDeepExts{"deepexr", "deepshad", "dtex"};
+
+    static void updateTraitsFromArgs(const FnKat::Asset::StringMap& args,
+                                     const TraitsDataPtr& traitsData)
+    {
+        // Colour space.
+        if (const auto keyAndValue = args.find("colorspace"); keyAndValue != cend(args))
+        {
+            OCIOColorManagedTrait{traitsData}.setColorspace(keyAndValue->second);
+        }
+
+        // Display name
+        if (const auto keyAndValue = args.find("outputName"); keyAndValue != cend(args))
+        {
+            DisplayNameTrait displayNameTrait{traitsData};
+            displayNameTrait.setName(keyAndValue->second);
+            displayNameTrait.setQualifiedName(keyAndValue->second);
+        }
+
+        // MIME type and Deep trait.
+        if (const auto keyAndValue = args.find("ext"); keyAndValue != cend(args))
+        {
+            if (const auto extAndMime = kExtToMimeMap.find(keyAndValue->second);
+                extAndMime != cend(kExtToMimeMap))
+            {
+                LocatableContentTrait{traitsData}.setMimeType(extAndMime->second);
+            }
+
+            if (kDeepExts.find(keyAndValue->second) != cend(kDeepExts))
+            {
+                DeepTrait::imbueTo(traitsData);
+            }
+        }
+    }
+};
+
 // Utility declarations
 using WorkfileAssetPublisher = MediaCreationPublishStrategy<WorkfileSpecification>;
-
-using ImageAssetPublisher =
-    MediaCreationPublishStrategy<openassetio_mediacreation::specifications::twoDimensional::
-                                     DeepBitmapImageResourceSpecification>;
 
 using SceneGeometryAssetPublisher =
     MediaCreationPublishStrategy<openassetio_mediacreation::specifications::threeDimensional::
