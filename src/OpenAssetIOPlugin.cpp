@@ -30,6 +30,7 @@
 #include <openassetio/access.hpp>
 #include <openassetio/constants.hpp>
 #include <openassetio/errors/exceptions.hpp>
+#include <openassetio/hostApi/EntityReferencePager.hpp>
 #include <openassetio/hostApi/ManagerFactory.hpp>
 #include <openassetio/log/LoggerInterface.hpp>
 #include <openassetio/pluginSystem/CppPluginSystemManagerImplementationFactory.hpp>
@@ -44,7 +45,9 @@
 #include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
 #include <openassetio_mediacreation/traits/lifecycle/VersionTrait.hpp>
 #include <openassetio_mediacreation/traits/managementPolicy/ManagedTrait.hpp>
+#include <openassetio_mediacreation/traits/relationship/SingularTrait.hpp>
 #include <openassetio_mediacreation/traits/threeDimensional/SourcePathTrait.hpp>
+#include <openassetio_mediacreation/traits/usage/RelationshipTrait.hpp>
 
 #include "KatanaHostInterface.hpp"
 #include "PublishStrategies.hpp"
@@ -1012,7 +1015,18 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
             throw std::runtime_error("Existing assetId not specified in publish");
         }
 
+        using BatchElementErrorPolicyTag =
+            openassetio::hostApi::Manager::BatchElementErrorPolicyTag;
+        using openassetio::access::RelationsAccess;
+        using openassetio::access::ResolveAccess;
+        using openassetio::hostApi::EntityReferencePagerPtr;
+        using openassetio::trait::TraitsData;
+        using openassetio::trait::TraitsDataPtr;
+        using openassetio_mediacreation::traits::content::LocatableContentTrait;
+        using openassetio_mediacreation::traits::lifecycle::VersionTrait;
         using openassetio_mediacreation::traits::managementPolicy::ManagedTrait;
+        using openassetio_mediacreation::traits::relationship::SingularTrait;
+        using openassetio_mediacreation::traits::usage::RelationshipTrait;
 
         const PublishStrategy& strategy = publishStrategies_.strategyForAssetType(assetType);
 
@@ -1030,19 +1044,93 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
         // Indicate to the Manager we wish to publish something via preflight
         const auto entityReference = manager_->createEntityReference(assetIdIt->second);
 
-        const openassetio::EntityReference workingRef =
-            manager_->preflight(entityReference,
-                                strategy.prePublishTraitData(assetFields, args),
-                                openassetio::access::PublishingAccess::kWrite,
-                                context_);
+        const openassetio::EntityReference workingRef = [&]
+        {
+            openassetio::EntityReference parentWorkingRef =
+                manager_->preflight(entityReference,
+                                    strategy.prePublishTraitData(assetFields, args),
+                                    openassetio::access::PublishingAccess::kWrite,
+                                    context_);
+
+            // If the "versionUp" arg isn't set or is not "False", then
+            // just use the `preflight()` reference.
+            auto keyAndValue = args.find("versionUp");
+            if (keyAndValue == args.end() || keyAndValue->second != "False")
+            {
+                return parentWorkingRef;
+            }
+
+            // Attempt to communicate an equivalent of Katana's
+            // "versionUp=False" arg, which is provided for several
+            // different asset types, in particular Katana scene files.
+            //
+            // We use a relationship query with kWrite access mode and
+            // relationship traits specifying the explicit version that
+            // we want to target.
+            //
+            // We're assuming that the asset manager will understand
+            // this as "I really want to write to this specific version
+            // rather than create a new version".
+            //
+            // The manager may then allow overwriting, or create a new
+            // "revision", of the same version.
+            //
+            // If the manager doesn't support this workflow, then we
+            // continue to use the entity returned from the above
+            // `preflight()` call as the working reference.
+
+            const TraitsDataPtr versionTraitsData = manager_->resolve(
+                entityReference, {VersionTrait::kId}, ResolveAccess::kRead, context_);
+
+            const auto maybeStableTag = VersionTrait{versionTraitsData}.getStableTag();
+            // If we can't get the explicit version that we want to
+            // write to, then abort and return the `preflight()`
+            // reference.
+            if (!maybeStableTag.has_value())
+            {
+                return parentWorkingRef;
+            }
+
+            // { Relationship, Singular, Version} trait set, with
+            // `stableTag` filter predicate.
+            const TraitsDataPtr specificVersionRelationship = TraitsData::make();
+            RelationshipTrait::imbueTo(specificVersionRelationship);
+            SingularTrait::imbueTo(specificVersionRelationship);
+            VersionTrait{specificVersionRelationship}.setStableTag(*maybeStableTag);
+
+            // See if we can get a writeable reference to the
+            // explicit version. Use kVariant tag so we can ignore
+            // any errors.
+            const auto maybeEntityRefPager =
+                manager_->getWithRelationship(parentWorkingRef,
+                                              specificVersionRelationship,
+                                              1,
+                                              RelationsAccess::kWrite,
+                                              context_,
+                                              {},
+                                              BatchElementErrorPolicyTag::kVariant);
+
+            const auto* entityRefPager = std::get_if<EntityReferencePagerPtr>(&maybeEntityRefPager);
+            // If the relationship query isn't supported, then ignore
+            // the error and abort, returning the `preflight()`
+            // reference.
+            if (!entityRefPager)
+            {
+                return parentWorkingRef;
+            }
+
+            const openassetio::EntityReferences writeableRefs = (*entityRefPager)->get();
+            // If no results, or an unexpected number of results, then
+            // abort and return the `preflight()` reference.
+            if (writeableRefs.size() != 1)
+            {
+                return parentWorkingRef;
+            }
+
+            return writeableRefs.front();
+        }();
 
         assetId = workingRef.toString();
-
-        using openassetio::access::ResolveAccess;
-        using BatchElementErrorPolicyTag =
-            openassetio::hostApi::Manager::BatchElementErrorPolicyTag;
-        using openassetio::trait::TraitsDataPtr;
-        using openassetio_mediacreation::traits::content::LocatableContentTrait;
 
         // In almost all cases, Katana will immediately pass `assetId`
         // to `resolveAsset()` and expect a file path to be returned.

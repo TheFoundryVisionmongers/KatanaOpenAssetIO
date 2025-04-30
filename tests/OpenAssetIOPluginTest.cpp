@@ -625,9 +625,8 @@ SCENARIO("Render node publishing")
  * distinguishes between these via a "versionUp" flag. A good analogy is
  * creating a git revision vs. a git tag.
  *
- * However, the OpenAssetIO publishing flow makes no such distinction.
- * Here, we test both cases, but the behaviour is identical for now.
- * This may be revisited if an OpenAssetIO analogy can be implemented.
+ * This is simulated in KatanaOpenAssetIO by using a `kWrite`
+ * relationship query for the explicit version, if supported.
  */
 SCENARIO("Katana scene publishing")
 {
@@ -637,20 +636,12 @@ SCENARIO("Katana scene publishing")
 
     GIVEN("an assetId")
     {
-        const std::string assetId = "bal:///cat?v=1";
+        const std::string assetId = "bal:///cat/v1";
 
         WHEN("asset fields are retrieved, excluding defaults")
         {
             FnKat::Asset::StringMap assetFields;
             plugin->getAssetFields(assetId, false, assetFields);
-
-            THEN("fields contain reference, name and version")
-            {
-                CHECK(assetFields.size() == 3);
-                CHECK(assetFields.at("__entityReference") == assetId);
-                CHECK(assetFields.at("name") == "Cat");
-                CHECK(assetFields.at("version") == "1");
-            }
 
             AND_GIVEN("File->Save args")
             {
@@ -667,9 +658,9 @@ SCENARIO("Katana scene publishing")
                         std::string managerDrivenPath;
                         plugin->resolveAsset(inFlightAssetId, managerDrivenPath);
 
-                        THEN("path is to a staging area")
+                        THEN("path is to a staging area for a revision")
                         {
-                            CHECK(managerDrivenPath == "/some/staging/area/cat.katana");
+                            CHECK(managerDrivenPath == "/some/staging/area/cat.v1.rev2.katana");
                         }
                     }
 
@@ -689,8 +680,6 @@ SCENARIO("Katana scene publishing")
                                 FnKat::Asset::StringMap actual;
                                 plugin->getAssetAttributes(newAssetId, "", actual);
 
-                                CHECK(newAssetId == "bal:///cat?v=2");
-
                                 const FnKat::Asset::StringMap expected = {
                                     {"openassetio-mediacreation:usage,Entity", ""},
                                     {"openassetio-mediacreation:application,Work", ""},
@@ -699,8 +688,9 @@ SCENARIO("Katana scene publishing")
                                      "2"},
                                     {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
                                     {"openassetio-mediacreation:content,LocatableContent", ""},
+                                    // Second revision of same version.
                                     {"openassetio-mediacreation:content,LocatableContent,location",
-                                     "file:///some/staging/area/cat.katana"},
+                                     "file:///some/staging/area/cat.v1.rev2.katana"},
                                     {"openassetio-mediacreation:content,LocatableContent,mimeType",
                                      "application/vnd.foundry.katana.project"}};
 
@@ -728,7 +718,7 @@ SCENARIO("Katana scene publishing")
 
                         THEN("path is to a staging area")
                         {
-                            CHECK(managerDrivenPath == "/some/staging/area/cat.katana");
+                            CHECK(managerDrivenPath == "/some/staging/area/cat.v2.rev1.katana");
                         }
                     }
 
@@ -748,8 +738,6 @@ SCENARIO("Katana scene publishing")
                                 FnKat::Asset::StringMap actual;
                                 plugin->getAssetAttributes(newAssetId, "", actual);
 
-                                CHECK(newAssetId == "bal:///cat?v=2");
-
                                 const FnKat::Asset::StringMap expected = {
                                     {"openassetio-mediacreation:usage,Entity", ""},
                                     {"openassetio-mediacreation:application,Work", ""},
@@ -758,8 +746,9 @@ SCENARIO("Katana scene publishing")
                                      "2"},
                                     {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
                                     {"openassetio-mediacreation:content,LocatableContent", ""},
+                                    // First revision of new version.
                                     {"openassetio-mediacreation:content,LocatableContent,location",
-                                     "file:///some/staging/area/cat.katana"},
+                                     "file:///some/staging/area/cat.v2.rev1.katana"},
                                     {"openassetio-mediacreation:content,LocatableContent,mimeType",
                                      "application/vnd.foundry.katana.project"}};
 

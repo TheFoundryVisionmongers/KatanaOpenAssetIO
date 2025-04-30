@@ -128,8 +128,9 @@ struct MediaCreationPublishStrategy : PublishStrategy
  * - "File"->"Export Selection" sets both to false by default, but
  *   can be modified by asset browser.
  *
- * Currently, we make no use of these flags and so do not distinguish
- * different kinds of publish. This may be revisited in the future.
+ * The "versionUp" flag is handled generically in `createAssetAndPath()`
+ * using a relationship query to signal to the manager that we want
+ * to target an explicit version.
  */
 struct KatanaSceneAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
 {

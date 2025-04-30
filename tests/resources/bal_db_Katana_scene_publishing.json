@@ -12,7 +12,7 @@
     }
   },
   "entities": {
-    "cat": {
+    "cat/v1": {
       "versions": [
         {
           "traits": {
@@ -22,7 +22,7 @@
               "name": "Cat"
             },
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/permanent/storage/cat.v1.katana"
+              "location": "file:///some/permanent/storage/cat.v1.rev1.katana"
             }
           }
         }
@@ -40,7 +40,42 @@
         "managerDriven": {
           "traits": {
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/staging/area/cat.katana"
+              "location": "file:///some/staging/area/cat.v2.rev1.katana"
+            }
+          }
+        }
+      },
+      "relations": [
+        {
+          "__comment": "Writeable version relationship redirecting publish to a 'revision' working reference, below",
+          "traits": {
+            "openassetio-mediacreation:usage.Relationship":  {},
+            "openassetio-mediacreation:lifecycle.Version":  {"stableTag": "1"},
+            "openassetio-mediacreation:relationship.Singular": {}
+          },
+          "entities": [
+            "cat/revision/v1"
+          ],
+          "access": "write"
+        }
+      ]
+    },
+    "cat/revision/v1": {
+      "versions": [{"traits":  {}}],
+      "overrideByAccess": {
+        "__comment1": "Determines traits that must be provided to `preflight` and `register`, and returned from `entityTraits` with `kWrite` access mode. I.e. WorkfileSpecification",
+        "write": {
+          "traits": {
+            "openassetio-mediacreation:usage.Entity": {},
+            "openassetio-mediacreation:application.Work": {},
+            "openassetio-mediacreation:content.LocatableContent": {}
+          }
+        },
+        "__comment2": "Trait values available when `resolve`d with a `kManagerDriven` access mode",
+        "managerDriven": {
+          "traits": {
+            "openassetio-mediacreation:content.LocatableContent": {
+              "location": "file:///some/staging/area/cat.v1.rev2.katana"
             }
           }
         }
