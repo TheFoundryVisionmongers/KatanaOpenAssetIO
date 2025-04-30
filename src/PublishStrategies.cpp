@@ -112,6 +112,58 @@ struct MediaCreationPublishStrategy : PublishStrategy
 };
 
 /**
+ * Katana scene file `.katana` publishing.
+ *
+ * `args` passed to `createAssetAndPath()` (from
+ * KatanaFile.CreateSceneAsset):
+ * - versionUp: Flag that controls whether to create a new version.
+ * - publish: Flag that controls whether to publish the resulting
+ *   scene as the current version.
+ *
+ * These are set as follows:
+ * - "File"->"Version Up and Save" sets both to true.
+ * - "File"->"Save" sets both to false.
+ * - "File"->"Save As" sets both to false by default, but can be
+ *   modified by asset browser.
+ * - "File"->"Export Selection" sets both to false by default, but
+ *   can be modified by asset browser.
+ *
+ * Currently, we make no use of these flags and so do not distinguish
+ * different kinds of publish. This may be revisited in the future.
+ */
+struct KatanaSceneAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    {
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.project");  // Invented
+    }
+};
+
+/**
  * Publish strategy for Katana LookFiles.
  *
  * These can be published either as a .klf archive, or as a directory
@@ -255,7 +307,7 @@ using SceneLightingAssetPublisher =
 PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathConverter)
 {
     strategies_[kFnAssetTypeKatanaScene] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<KatanaSceneAssetPublisher>(fileUrlPathConverter);
     // TODO(DH): This would be better as something like ApplicationExtensionAssetPublisher...
     strategies_[kFnAssetTypeMacro] = std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLiveGroup] =

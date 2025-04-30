@@ -616,4 +616,160 @@ SCENARIO("Render node publishing")
         }
     }
 }
+
+/**
+ * This test simulates the "File->Save" and "File->Version Up and Save"
+ * menu options.
+ *
+ * Katana involves the asset manager in both of these cases, and
+ * distinguishes between these via a "versionUp" flag. A good analogy is
+ * creating a git revision vs. a git tag.
+ *
+ * However, the OpenAssetIO publishing flow makes no such distinction.
+ * Here, we test both cases, but the behaviour is identical for now.
+ * This may be revisited if an OpenAssetIO analogy can be implemented.
+ */
+SCENARIO("Katana scene publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_Katana_scene_publishing.json"}}));
+
+    GIVEN("an assetId")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+
+        WHEN("asset fields are retrieved, excluding defaults")
+        {
+            FnKat::Asset::StringMap assetFields;
+            plugin->getAssetFields(assetId, false, assetFields);
+
+            THEN("fields contain reference, name and version")
+            {
+                CHECK(assetFields.size() == 3);
+                CHECK(assetFields.at("__entityReference") == assetId);
+                CHECK(assetFields.at("name") == "Cat");
+                CHECK(assetFields.at("version") == "1");
+            }
+
+            AND_GIVEN("File->Save args")
+            {
+                const FnKat::Asset::StringMap args{{"publish", "False"}, {"versionUp", "False"}};
+
+                WHEN("asset creation is started")
+                {
+                    std::string inFlightAssetId;
+                    plugin->createAssetAndPath(
+                        nullptr, "katana scene", assetFields, args, true, inFlightAssetId);
+
+                    AND_WHEN("in-flight reference path is resolved")
+                    {
+                        std::string managerDrivenPath;
+                        plugin->resolveAsset(inFlightAssetId, managerDrivenPath);
+
+                        THEN("path is to a staging area")
+                        {
+                            CHECK(managerDrivenPath == "/some/staging/area/cat.katana");
+                        }
+                    }
+
+                    AND_WHEN("in-flight reference fields are retrieved, excluding defaults")
+                    {
+                        FnKat::Asset::StringMap inFlightAssetFields;
+                        plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+
+                        AND_WHEN("asset creation is finished")
+                        {
+                            std::string newAssetId;
+                            plugin->postCreateAsset(
+                                nullptr, "katana scene", inFlightAssetFields, args, newAssetId);
+
+                            THEN("entity has been registered with expected traits")
+                            {
+                                FnKat::Asset::StringMap actual;
+                                plugin->getAssetAttributes(newAssetId, "", actual);
+
+                                CHECK(newAssetId == "bal:///cat?v=2");
+
+                                const FnKat::Asset::StringMap expected = {
+                                    {"openassetio-mediacreation:usage,Entity", ""},
+                                    {"openassetio-mediacreation:application,Work", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version,specifiedTag",
+                                     "2"},
+                                    {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                                    {"openassetio-mediacreation:content,LocatableContent", ""},
+                                    {"openassetio-mediacreation:content,LocatableContent,location",
+                                     "file:///some/staging/area/cat.katana"},
+                                    {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                                     "application/vnd.foundry.katana.project"}};
+
+                                CHECK(actual == expected);
+                            }
+                        }
+                    }
+                }
+            }
+
+            AND_GIVEN("File->Version Up and Save args")
+            {
+                const FnKat::Asset::StringMap args{{"publish", "True"}, {"versionUp", "True"}};
+
+                WHEN("asset creation is started")
+                {
+                    std::string inFlightAssetId;
+                    plugin->createAssetAndPath(
+                        nullptr, "katana scene", assetFields, args, true, inFlightAssetId);
+
+                    AND_WHEN("in-flight reference path is resolved")
+                    {
+                        std::string managerDrivenPath;
+                        plugin->resolveAsset(inFlightAssetId, managerDrivenPath);
+
+                        THEN("path is to a staging area")
+                        {
+                            CHECK(managerDrivenPath == "/some/staging/area/cat.katana");
+                        }
+                    }
+
+                    AND_WHEN("in-flight reference fields are retrieved, excluding defaults")
+                    {
+                        FnKat::Asset::StringMap inFlightAssetFields;
+                        plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+
+                        AND_WHEN("asset creation is finished")
+                        {
+                            std::string newAssetId;
+                            plugin->postCreateAsset(
+                                nullptr, "katana scene", inFlightAssetFields, args, newAssetId);
+
+                            THEN("entity has been registered with expected traits")
+                            {
+                                FnKat::Asset::StringMap actual;
+                                plugin->getAssetAttributes(newAssetId, "", actual);
+
+                                CHECK(newAssetId == "bal:///cat?v=2");
+
+                                const FnKat::Asset::StringMap expected = {
+                                    {"openassetio-mediacreation:usage,Entity", ""},
+                                    {"openassetio-mediacreation:application,Work", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version", ""},
+                                    {"openassetio-mediacreation:lifecycle,Version,specifiedTag",
+                                     "2"},
+                                    {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                                    {"openassetio-mediacreation:content,LocatableContent", ""},
+                                    {"openassetio-mediacreation:content,LocatableContent,location",
+                                     "file:///some/staging/area/cat.katana"},
+                                    {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                                     "application/vnd.foundry.katana.project"}};
+
+                                CHECK(actual == expected);
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
 // NOLINTEND(*-chained-comparison,*-function-cognitive-complexity,*-container-size-empty)
