@@ -195,13 +195,23 @@ SCENARIO("getAssetAttributes()")
 }
 
 /**
- * This test simulates the calls that LookFileMaterialsOut makes when
- * writing a new material lookfile (.klf).
+ * This test simulates the calls that LookFileBake and
+ * LookFileMaterialsOut makes when writing a new material lookfile
+ * (.klf).
+ *
+ * Technically LookFileBake has an extra arg of "fileExtension", but
+ * this doesn't add any information for us, so is left unset in the
+ * tests.
+ *
+ * Plugins can add more output formats to LookFileBake. By default,
+ * an output format produces multiple files, so the asset system should
+ * return a writeable directory. The default "as archive" (.klf) format
+ * is a special case.
  *
  * The calls were determined by enabling KatanaOpenAssetIO debug
  * logging and replicating them here.
  */
-SCENARIO("LookFileMaterialsOut publishing")
+SCENARIO("LookFileBake / LookFileMaterialsOut publishing")
 {
     auto plugin = assetPluginInstance();
     REQUIRE(plugin->runAssetPluginCommand(
@@ -226,7 +236,7 @@ SCENARIO("LookFileMaterialsOut publishing")
                 CHECK(assetFields.at("version") == "1");
             }
 
-            AND_GIVEN("LookFileMaterialsOut publish as archive args")
+            AND_GIVEN("LookFile publish as archive args")
             {
                 const FnKat::Asset::StringMap args{{"outputFormat", "as archive"}};
 
@@ -305,9 +315,9 @@ SCENARIO("LookFileMaterialsOut publishing")
                 }
             }
 
-            AND_GIVEN("LookFileMaterialsOut publish as directory args")
+            AND_GIVEN("LookFile published as another output format")
             {
-                const FnKat::Asset::StringMap args{{"outputFormat", "as directory"}};
+                const FnKat::Asset::StringMap args{{"outputFormat", "anything else"}};
 
                 WHEN("asset creation is started")
                 {

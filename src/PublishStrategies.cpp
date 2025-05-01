@@ -167,9 +167,18 @@ private:
 /**
  * Publish strategy for Katana LookFiles.
  *
- * These can be published either as a .klf archive, or as a directory
- * containing per-pass .klf and .attr files. So we disambiguate by
- * making use of the MIME type on the published LocatableContent trait.
+ * By default, these can be published either as a .klf archive, or as a
+ * directory containing per-pass .klf and .attr files.
+ *
+ * LookFileBakeAPI.RegisterOutputFormat() can be used to add yet more
+ * output formats.
+ *
+ * An output format is usually expected to create multiple files, so the
+ * asset system should return a writeable directory. The default "as
+ * archive" is a special case.
+ *
+ * We disambiguate between "as archive" and other formats using the
+ * MIME type.
  */
 struct LookfileAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
 {
@@ -200,15 +209,15 @@ private:
     {
         if (const auto keyAndValue = args.find("outputFormat"); keyAndValue != cend(args))
         {
-            if (keyAndValue->second == "as directory")
+            if (keyAndValue->second == "as archive")
             {
-                WorkfileSpecification{traitsData}.locatableContentTrait().setMimeType(
-                    "inode/directory");  // From xdg/shared-mime-info
-            }
-            else if (keyAndValue->second == "as archive")
-            {
-                WorkfileSpecification{traitsData}.locatableContentTrait().setMimeType(
+                LocatableContentTrait{traitsData}.setMimeType(
                     "application/vnd.foundry.katana.lookfile");  // Invented
+            }
+            else
+            {
+                LocatableContentTrait{traitsData}.setMimeType(
+                    "inode/directory");  // From xdg/shared-mime-info
             }
         }
     }
