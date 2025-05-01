@@ -20,6 +20,7 @@
 #include <openassetio_mediacreation/specifications/threeDimensional/SceneLightingResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/threeDimensional/ShaderResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/twoDimensional/BitmapImageResourceSpecification.hpp>
+#include <openassetio_mediacreation/traits/application/ConfigTrait.hpp>
 #include <openassetio_mediacreation/traits/color/OCIOColorManagedTrait.hpp>
 #include <openassetio_mediacreation/traits/content/LocatableContentTrait.hpp>
 #include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
@@ -38,6 +39,7 @@ namespace
 using openassetio::trait::TraitsDataPtr;
 using openassetio_mediacreation::specifications::application::WorkfileSpecification;
 using openassetio_mediacreation::specifications::twoDimensional::BitmapImageResourceSpecification;
+using openassetio_mediacreation::traits::application::ConfigTrait;
 using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
 using openassetio_mediacreation::traits::content::LocatableContentTrait;
 using openassetio_mediacreation::traits::identity::DisplayNameTrait;
@@ -224,6 +226,51 @@ private:
 };
 
 /**
+ * Publish strategy for exported LookFileManager settings.
+ *
+ * I.e. LookFileManager parameters->(right-click)->Import/Export->Export
+ * Manager Settings.
+ *
+ * This is an XML document, though with a `.lfmsexport` file extension.
+ *
+ * We add a MIME type, as well as imbue the `Config` trait to signal
+ * that this is purely settings.
+ */
+struct LookFileManagerSettingsPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueTraitAndMime(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueTraitAndMime(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueTraitAndMime(const TraitsDataPtr& traitsData)
+    {
+        ConfigTrait::imbueTo(traitsData);
+
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.lookfilemanager-settings+xml");  // Invented
+    }
+};
+
+/**
  * Publish strategy for images.
  */
 struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
@@ -326,7 +373,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
     strategies_[kFnAssetTypeLookFile] =
         std::make_unique<LookfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFileMgrSettings] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<LookFileManagerSettingsPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeAlembic] =
         std::make_unique<SceneGeometryAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeCastingSheet] =
