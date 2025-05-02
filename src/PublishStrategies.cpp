@@ -38,6 +38,8 @@ namespace
 
 using openassetio::trait::TraitsDataPtr;
 using openassetio_mediacreation::specifications::application::WorkfileSpecification;
+using openassetio_mediacreation::specifications::threeDimensional::
+    SceneLightingResourceSpecification;
 using openassetio_mediacreation::specifications::twoDimensional::BitmapImageResourceSpecification;
 using openassetio_mediacreation::traits::application::ConfigTrait;
 using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
@@ -312,6 +314,45 @@ private:
 };
 
 /**
+ * Publish strategy for GafferThree exported rigs.
+ *
+ * I.e. GafferThree parameters->(right-click)->Export Rig.
+ *
+ * This is an XML document, though with a `.rig` file extension.
+ */
+struct GafferThreeRigPublisher : MediaCreationPublishStrategy<SceneLightingResourceSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    {
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.rig+xml");  // Invented
+    }
+};
+
+/**
  * Publish strategy for images.
  */
 struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
@@ -396,10 +437,6 @@ using SceneGeometryAssetPublisher =
 using ShaderResourceAssetPublisher = MediaCreationPublishStrategy<
     openassetio_mediacreation::specifications::threeDimensional::ShaderResourceSpecification>;
 
-using SceneLightingAssetPublisher =
-    MediaCreationPublishStrategy<openassetio_mediacreation::specifications::threeDimensional::
-                                     SceneLightingResourceSpecification>;
-
 }  // anonymous namespace
 
 PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathConverter)
@@ -424,7 +461,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
     strategies_[kFnAssetTypeFCurveFile] =
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeGafferThreeRig] =
-        std::make_unique<SceneLightingAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<GafferThreeRigPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeScenegraphBookmarks] =
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeShader] =
