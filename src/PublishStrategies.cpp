@@ -167,6 +167,47 @@ private:
 };
 
 /**
+ * Publish strategy for LiveGroups.
+ *
+ * These are Katana scene files containing a single group, exported as
+ * XML.
+ *
+ * No additional metadata is given when publishing, so we just set a
+ * MIME type.
+ */
+struct LiveGroupAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    {
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.livegroup+xml");  // Invented
+    }
+};
+
+/**
  * Publish strategy for Katana LookFiles.
  *
  * By default, these can be published either as a .klf archive, or as a
@@ -368,7 +409,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
     // TODO(DH): This would be better as something like ApplicationExtensionAssetPublisher...
     strategies_[kFnAssetTypeMacro] = std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLiveGroup] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<LiveGroupAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeImage] = std::make_unique<ImageAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFile] =
         std::make_unique<LookfileAssetPublisher>(fileUrlPathConverter);

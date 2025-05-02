@@ -836,4 +836,61 @@ SCENARIO("LookFileManager settings publishing")
         }
     }
 }
+
+/**
+ * This test simulates LiveGroup "Publish..." menu action.
+ *
+ * This is a simple case with no additional metadata, other than an
+ * (invented) MIME type.
+ */
+SCENARIO("LiveGroup publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_LiveGroup_publishing.json"}}));
+
+    GIVEN("target asset")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+        FnKat::Asset::StringMap assetFields;
+        plugin->getAssetFields(assetId, false, assetFields);
+
+        AND_GIVEN("LiveGroup publish args (i.e. empty)")
+        {
+            const FnKat::Asset::StringMap args{};
+
+            WHEN("asset is published")
+            {
+                std::string inFlightAssetId;
+                plugin->createAssetAndPath(
+                    nullptr, "live group", assetFields, args, true, inFlightAssetId);
+                FnKat::Asset::StringMap inFlightAssetFields;
+                plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+                std::string newAssetId;
+                plugin->postCreateAsset(
+                    nullptr, "live group", inFlightAssetFields, args, newAssetId);
+
+                THEN("entity has been registered with expected traits")
+                {
+                    FnKat::Asset::StringMap actual;
+                    plugin->getAssetAttributes(newAssetId, "", actual);
+
+                    const FnKat::Asset::StringMap expected = {
+                        {"openassetio-mediacreation:usage,Entity", ""},
+                        {"openassetio-mediacreation:application,Work", ""},
+                        {"openassetio-mediacreation:lifecycle,Version", ""},
+                        {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
+                        {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                        {"openassetio-mediacreation:content,LocatableContent", ""},
+                        {"openassetio-mediacreation:content,LocatableContent,location",
+                         "file:///some/staging/area/cat.livegroup"},
+                        {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                         "application/vnd.foundry.katana.livegroup+xml"}};
+
+                    CHECK(actual == expected);
+                }
+            }
+        }
+    }
+}
 // NOLINTEND(*-chained-comparison,*-function-cognitive-complexity,*-container-size-empty)
