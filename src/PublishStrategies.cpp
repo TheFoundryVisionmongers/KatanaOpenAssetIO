@@ -353,6 +353,43 @@ private:
 };
 
 /**
+ * Publish strategy for Macros.
+ *
+ * I.e. any node Parameters panel->(wrench menu)->Save as Macro.
+ */
+struct MacroPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    {
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.macro");  // Invented
+    }
+};
+
+/**
  * Publish strategy for images.
  */
 struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
@@ -443,8 +480,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
 {
     strategies_[kFnAssetTypeKatanaScene] =
         std::make_unique<KatanaSceneAssetPublisher>(fileUrlPathConverter);
-    // TODO(DH): This would be better as something like ApplicationExtensionAssetPublisher...
-    strategies_[kFnAssetTypeMacro] = std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+    strategies_[kFnAssetTypeMacro] = std::make_unique<MacroPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLiveGroup] =
         std::make_unique<LiveGroupAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeImage] = std::make_unique<ImageAssetPublisher>(fileUrlPathConverter);
