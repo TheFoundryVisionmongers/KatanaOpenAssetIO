@@ -388,6 +388,45 @@ private:
 };
 
 /**
+ * Publish strategy for FCurve files.
+ *
+ * I.e. any curve parameter->(right-click)->Export FCurve
+ *
+ * This is an XML document, though with a `.fcurve` file extension.
+ */
+struct FCurvePublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueMimeType(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    {
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.fcurve+xml");  // Invented
+    }
+};
+
+/**
  * Publish strategy for images.
  */
 struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
@@ -479,8 +518,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
         std::make_unique<LookfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFileMgrSettings] =
         std::make_unique<LookFileManagerSettingsPublisher>(fileUrlPathConverter);
-    strategies_[kFnAssetTypeFCurveFile] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+    strategies_[kFnAssetTypeFCurveFile] = std::make_unique<FCurvePublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeGafferThreeRig] =
         std::make_unique<GafferThreeRigPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeScenegraphBookmarks] =
