@@ -16,9 +16,7 @@
 #include <openassetio/trait/collection.hpp>
 
 #include <openassetio_mediacreation/specifications/application/WorkfileSpecification.hpp>
-#include <openassetio_mediacreation/specifications/threeDimensional/SceneGeometryResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/threeDimensional/SceneLightingResourceSpecification.hpp>
-#include <openassetio_mediacreation/specifications/threeDimensional/ShaderResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/twoDimensional/BitmapImageResourceSpecification.hpp>
 #include <openassetio_mediacreation/traits/application/ConfigTrait.hpp>
 #include <openassetio_mediacreation/traits/color/OCIOColorManagedTrait.hpp>
@@ -467,13 +465,6 @@ private:
 // Utility declarations
 using WorkfileAssetPublisher = MediaCreationPublishStrategy<WorkfileSpecification>;
 
-using SceneGeometryAssetPublisher =
-    MediaCreationPublishStrategy<openassetio_mediacreation::specifications::threeDimensional::
-                                     SceneGeometryResourceSpecification>;
-
-using ShaderResourceAssetPublisher = MediaCreationPublishStrategy<
-    openassetio_mediacreation::specifications::threeDimensional::ShaderResourceSpecification>;
-
 }  // anonymous namespace
 
 PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathConverter)
@@ -488,20 +479,19 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
         std::make_unique<LookfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLookFileMgrSettings] =
         std::make_unique<LookFileManagerSettingsPublisher>(fileUrlPathConverter);
-    strategies_[kFnAssetTypeAlembic] =
-        std::make_unique<SceneGeometryAssetPublisher>(fileUrlPathConverter);
-    strategies_[kFnAssetTypeCastingSheet] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
-    strategies_[kFnAssetTypeAttributeFile] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeFCurveFile] =
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeGafferThreeRig] =
         std::make_unique<GafferThreeRigPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeScenegraphBookmarks] =
         std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
-    strategies_[kFnAssetTypeShader] =
-        std::make_unique<ShaderResourceAssetPublisher>(fileUrlPathConverter);
+
+    // Katana does not publish using any of the remaining `kFnAssetType*`
+    // constants - these asset types are only ever ingested. I.e.
+    // - kFnAssetTypeAlembic
+    // - kFnAssetTypeCastingSheet
+    // - kFnAssetTypeAttributeFile
+    // - kFnAssetTypeShader
 }
 
 const PublishStrategy& PublishStrategies::strategyForAssetType(const std::string& assetType) const
