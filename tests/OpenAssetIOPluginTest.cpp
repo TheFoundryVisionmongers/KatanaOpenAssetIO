@@ -1065,4 +1065,62 @@ SCENARIO("FCurve publishing")
         }
     }
 }
+
+/**
+ * This test simulates the "Export Bookmarks..." menu option in the
+ * Scene Graph and Scene Explorer panels.
+ */
+SCENARIO("Scene Graph Bookmarks publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "",
+        "initialize",
+        {{"library_path", BAL_DB_DIR "/bal_db_scene_graph_bookmarks_publishing.json"}}));
+
+    GIVEN("target asset")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+        FnKat::Asset::StringMap assetFields;
+        plugin->getAssetFields(assetId, false, assetFields);
+
+        AND_GIVEN("Export Manager Settings args (i.e. empty)")
+        {
+            const FnKat::Asset::StringMap args{};
+
+            WHEN("asset is published")
+            {
+                std::string inFlightAssetId;
+                plugin->createAssetAndPath(
+                    nullptr, "scenegraph bookmarks", assetFields, args, true, inFlightAssetId);
+                FnKat::Asset::StringMap inFlightAssetFields;
+                plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+                std::string newAssetId;
+                plugin->postCreateAsset(
+                    nullptr, "scenegraph bookmarks", inFlightAssetFields, args, newAssetId);
+
+                THEN("entity has been registered with expected traits")
+                {
+                    FnKat::Asset::StringMap actual;
+                    plugin->getAssetAttributes(newAssetId, "", actual);
+
+                    const FnKat::Asset::StringMap expected = {
+                        {"openassetio-mediacreation:usage,Entity", ""},
+                        {"openassetio-mediacreation:application,Work", ""},
+                        {"openassetio-mediacreation:application,Config", ""},
+                        {"openassetio-mediacreation:lifecycle,Version", ""},
+                        {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
+                        {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                        {"openassetio-mediacreation:content,LocatableContent", ""},
+                        {"openassetio-mediacreation:content,LocatableContent,location",
+                         "file:///some/staging/area/cat.xml"},
+                        {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                         "application/vnd.foundry.katana.scenegraph-bookmarks+xml"}};
+
+                    CHECK(actual == expected);
+                }
+            }
+        }
+    }
+}
 // NOLINTEND(*-chained-comparison,*-function-cognitive-complexity,*-container-size-empty)

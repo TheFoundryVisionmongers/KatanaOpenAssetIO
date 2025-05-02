@@ -427,6 +427,48 @@ private:
 };
 
 /**
+ * Publish strategy for exported Scene Graph bookmarks.
+ *
+ * I.e. Scene Graph/Explorer->(bookmark icon)->Export Bookmarks.
+ *
+ * We add a MIME type, as well as imbue the `Config` trait to signal
+ * that this is purely settings.
+ */
+struct SceneGraphBookmarksPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueTraitAndMime(traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueTraitAndMime(traitsData);
+        return traitsData;
+    }
+
+private:
+    static void imbueTraitAndMime(const TraitsDataPtr& traitsData)
+    {
+        ConfigTrait::imbueTo(traitsData);
+
+        LocatableContentTrait(traitsData)
+            .setMimeType("application/vnd.foundry.katana.scenegraph-bookmarks+xml");  // Invented
+    }
+};
+
+/**
  * Publish strategy for images.
  */
 struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResourceSpecification>
@@ -500,10 +542,6 @@ private:
         }
     }
 };
-
-// Utility declarations
-using WorkfileAssetPublisher = MediaCreationPublishStrategy<WorkfileSpecification>;
-
 }  // anonymous namespace
 
 PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathConverter)
@@ -522,7 +560,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
     strategies_[kFnAssetTypeGafferThreeRig] =
         std::make_unique<GafferThreeRigPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeScenegraphBookmarks] =
-        std::make_unique<WorkfileAssetPublisher>(fileUrlPathConverter);
+        std::make_unique<SceneGraphBookmarksPublisher>(fileUrlPathConverter);
 
     // Katana does not publish using any of the remaining `kFnAssetType*`
     // constants - these asset types are only ever ingested. I.e.
