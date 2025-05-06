@@ -74,12 +74,9 @@ struct MediaCreationPublishStrategy : PublishStrategy
      */
     [[nodiscard]] TraitsDataPtr prePublishTraitData(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
-        const FnKat::Asset::StringMap& fields,
-        const FnKat::Asset::StringMap& args) const override
+        [[maybe_unused]] const FnKat::Asset::StringMap& fields,
+        [[maybe_unused]] const FnKat::Asset::StringMap& args) const override
     {
-        // TODO(DH): Populate with manager driven trait values
-        (void)fields;
-        (void)args;
         const auto specification = T::create();
         return specification.traitsData();
     }
@@ -94,10 +91,8 @@ struct MediaCreationPublishStrategy : PublishStrategy
     [[nodiscard]] TraitsDataPtr postPublishTraitData(
         // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
         const FnKat::Asset::StringMap& fields,
-        const FnKat::Asset::StringMap& args) const override
+        [[maybe_unused]] const FnKat::Asset::StringMap& args) const override
     {
-        // TODO(DH): Populate with manager katana driven trait values
-        (void)args;
         const auto specification = T::create();
 
         if (const auto managerDrivenValueIter =
