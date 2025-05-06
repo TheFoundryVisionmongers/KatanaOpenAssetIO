@@ -24,6 +24,16 @@
 #include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
 #include <openassetio_mediacreation/traits/twoDimensional/DeepTrait.hpp>
 
+#include <katana_openassetio/traits/application/LookFileTrait.hpp>
+#include <katana_openassetio/traits/application/MacroTrait.hpp>
+#include <katana_openassetio/traits/application/ProjectTrait.hpp>
+#include <katana_openassetio/traits/application/SceneGraphBookmarksTrait.hpp>
+#include <katana_openassetio/traits/nodes/GafferThreeTrait.hpp>
+#include <katana_openassetio/traits/nodes/LiveGroupTrait.hpp>
+#include <katana_openassetio/traits/nodes/LookFileManagerTrait.hpp>
+#include <katana_openassetio/traits/timeDomain/FCurveTrait.hpp>
+#include <katana_openassetio/traits/twoDimensional/PresetResolutionTrait.hpp>
+
 #include "constants.hpp"
 
 PublishStrategy::PublishStrategy(FileUrlPathConverterPtr fileUrlPathConverter)
@@ -44,6 +54,17 @@ using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
 using openassetio_mediacreation::traits::content::LocatableContentTrait;
 using openassetio_mediacreation::traits::identity::DisplayNameTrait;
 using openassetio_mediacreation::traits::twoDimensional::DeepTrait;
+
+// Katana-specific custom traits - see traits.yml.
+using katana_openassetio::traits::application::LookFileTrait;
+using katana_openassetio::traits::application::MacroTrait;
+using katana_openassetio::traits::application::ProjectTrait;
+using katana_openassetio::traits::application::SceneGraphBookmarksTrait;
+using katana_openassetio::traits::nodes::GafferThreeTrait;
+using katana_openassetio::traits::nodes::LiveGroupTrait;
+using katana_openassetio::traits::nodes::LookFileManagerTrait;
+using katana_openassetio::traits::timeDomain::FCurveTrait;
+using katana_openassetio::traits::twoDimensional::PresetResolutionTrait;
 
 /**
  * Generic publishing strategy.
@@ -139,7 +160,7 @@ struct KatanaSceneAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecific
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
@@ -149,13 +170,14 @@ struct KatanaSceneAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecific
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        ProjectTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.project");  // Invented
     }
@@ -180,7 +202,7 @@ struct LiveGroupAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecificat
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
@@ -190,13 +212,14 @@ struct LiveGroupAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecificat
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        LiveGroupTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.livegroup+xml");  // Invented
     }
@@ -228,7 +251,7 @@ struct LookfileAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecificati
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(args, traitsData);
+        imbueTraitAndMimeType(args, traitsData);
         return traitsData;
     }
 
@@ -238,13 +261,15 @@ struct LookfileAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecificati
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(args, traitsData);
+        imbueTraitAndMimeType(args, traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const FnKat::Asset::StringMap& args, const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const FnKat::Asset::StringMap& args,
+                                      const TraitsDataPtr& traitsData)
     {
+        LookFileTrait::imbueTo(traitsData);
         if (const auto keyAndValue = args.find("outputFormat"); keyAndValue != cend(args))
         {
             if (keyAndValue->second == "as archive")
@@ -300,7 +325,7 @@ private:
     static void imbueTraitAndMime(const TraitsDataPtr& traitsData)
     {
         ConfigTrait::imbueTo(traitsData);
-
+        LookFileManagerTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.lookfilemanager-settings+xml");  // Invented
     }
@@ -323,7 +348,7 @@ struct GafferThreeRigPublisher : MediaCreationPublishStrategy<SceneLightingResou
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
@@ -333,13 +358,14 @@ struct GafferThreeRigPublisher : MediaCreationPublishStrategy<SceneLightingResou
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        GafferThreeTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.rig+xml");  // Invented
     }
@@ -360,7 +386,7 @@ struct MacroPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
@@ -370,13 +396,14 @@ struct MacroPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        MacroTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.macro");  // Invented
     }
@@ -399,7 +426,7 @@ struct FCurvePublisher : MediaCreationPublishStrategy<WorkfileSpecification>
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
@@ -409,13 +436,14 @@ struct FCurvePublisher : MediaCreationPublishStrategy<WorkfileSpecification>
         const FnKat::Asset::StringMap& args) const override
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
-        imbueMimeType(traitsData);
+        imbueTraitAndMimeType(traitsData);
         return traitsData;
     }
 
 private:
-    static void imbueMimeType(const TraitsDataPtr& traitsData)
+    static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        FCurveTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.fcurve+xml");  // Invented
     }
@@ -457,6 +485,7 @@ private:
     static void imbueTraitAndMime(const TraitsDataPtr& traitsData)
     {
         ConfigTrait::imbueTo(traitsData);
+        SceneGraphBookmarksTrait::imbueTo(traitsData);
 
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.scenegraph-bookmarks+xml");  // Invented
@@ -534,6 +563,13 @@ private:
             {
                 DeepTrait::imbueTo(traitsData);
             }
+        }
+
+        // Resolution preset.
+
+        if (const auto keyAndValue = args.find("res"); keyAndValue != cend(args))
+        {
+            PresetResolutionTrait{traitsData}.setPresetName(keyAndValue->second);
         }
     }
 };

@@ -107,6 +107,8 @@ KatanaOpenAssetIO is known to build with:
   v1.0.0-rc.1.0.
 - [OpenAssetIO-MediaCreation](https://github.com/OpenAssetIO/OpenAssetIO-MediaCreation)
   v1.0.0-alpha.11.
+- [OpenAssetIO-TraitGen](https://github.com/OpenAssetIO/OpenAssetIO-TraitGen)
+  v1.0.0-alpha.11.
 - [Katana](https://www.foundry.com/products/katana) 7.0v4.
 - CPython 3.10.
 - CMake 3.26.

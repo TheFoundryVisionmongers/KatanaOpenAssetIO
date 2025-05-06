@@ -296,6 +296,7 @@ SCENARIO("LookFileBake / LookFileMaterialsOut publishing")
                                 plugin->getAssetAttributes(newAssetId, "", actual);
 
                                 const FnKat::Asset::StringMap expected = {
+                                    {"katana-openassetio:application,LookFile", ""},
                                     {"openassetio-mediacreation:usage,Entity", ""},
                                     {"openassetio-mediacreation:application,Work", ""},
                                     {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -450,6 +451,10 @@ SCENARIO("Render node publishing")
                                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                                     const FnKat::Asset::StringMap expected = {
+                                        {"katana-openassetio:twoDimensional,PresetResolution", ""},
+                                        {"katana-openassetio:twoDimensional,PresetResolution,"
+                                         "presetName",
+                                         "square_512"},
                                         {"openassetio-mediacreation:usage,Entity", ""},
                                         {"openassetio-mediacreation:twoDimensional,Image", ""},
                                         {"openassetio-mediacreation:twoDimensional,PixelBased", ""},
@@ -486,6 +491,7 @@ SCENARIO("Render node publishing")
                         {
                             const FnKat::Asset::StringMap postArgs{{"colorspace", "sRGB"},
                                                                    {"ext", "png"},
+                                                                   {"res", "NTSC"},
                                                                    {"outputName", "other name"}};
 
                             WHEN("asset creation is finished")
@@ -500,6 +506,9 @@ SCENARIO("Render node publishing")
                                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                                     FnKat::Asset::StringMap expected = {
+                                        {"katana-openassetio:twoDimensional,PresetResolution,"
+                                         "presetName",
+                                         "NTSC"},
                                         {"openassetio-mediacreation:identity,DisplayName,name",
                                          "other name"},
                                         {"openassetio-mediacreation:identity,DisplayName,"
@@ -691,6 +700,7 @@ SCENARIO("Katana scene publishing")
                                 plugin->getAssetAttributes(newAssetId, "", actual);
 
                                 const FnKat::Asset::StringMap expected = {
+                                    {"katana-openassetio:application,Project", ""},
                                     {"openassetio-mediacreation:usage,Entity", ""},
                                     {"openassetio-mediacreation:application,Work", ""},
                                     {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -749,6 +759,7 @@ SCENARIO("Katana scene publishing")
                                 plugin->getAssetAttributes(newAssetId, "", actual);
 
                                 const FnKat::Asset::StringMap expected = {
+                                    {"katana-openassetio:application,Project", ""},
                                     {"openassetio-mediacreation:usage,Entity", ""},
                                     {"openassetio-mediacreation:application,Work", ""},
                                     {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -818,6 +829,7 @@ SCENARIO("LookFileManager settings publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:nodes,LookFileManager", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
                         {"openassetio-mediacreation:application,Config", ""},
@@ -876,6 +888,7 @@ SCENARIO("LiveGroup publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:nodes,LiveGroup", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -938,6 +951,7 @@ SCENARIO("GafferThree rig publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:nodes,GafferThree", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:threeDimensional,Lighting", ""},
                         {"openassetio-mediacreation:threeDimensional,Spatial", ""},
@@ -993,6 +1007,7 @@ SCENARIO("Macro publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:application,Macro", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -1048,6 +1063,7 @@ SCENARIO("FCurve publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:timeDomain,FCurve", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
@@ -1105,6 +1121,7 @@ SCENARIO("Scene Graph Bookmarks publishing")
                     plugin->getAssetAttributes(newAssetId, "", actual);
 
                     const FnKat::Asset::StringMap expected = {
+                        {"katana-openassetio:application,SceneGraphBookmarks", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
                         {"openassetio-mediacreation:application,Config", ""},

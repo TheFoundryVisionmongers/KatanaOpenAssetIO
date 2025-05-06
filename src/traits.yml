@@ -1,0 +1,101 @@
+# yaml-language-server: $schema=https://raw.githubusercontent.com/OpenAssetIO/OpenAssetIO-TraitGen/main/python/openassetio_traitgen/schema.json
+# yamllint disable-line rule:document-start
+package: katana-openassetio
+description: >
+  Traits specific to Katana.
+  
+  KatanaOpenAssetIO will imbue these traits as appropriate in the
+  outgoing data when publishing entities.
+  
+  The traits allow participating managers to detect, store and present
+  Katana-specific qualities of entities.
+  
+  The traits are entirely opt-in. A generic OpenAssetIO manager plugin
+  that only understands the community-sourced MediaCreation traits
+  library (https://github.com/OpenAssetIO/OpenAssetIO-MediaCreation)
+  should still work fine, albeit using a coarser-grained categorisation
+  of entities.
+  
+  To make use of these traits, Python and/or C++ classes can be
+  generated from this YAML document. See the TraitGen project for more
+  details: https://github.com/OpenAssetIO/OpenAssetIO-TraitGen
+
+traits:
+  application:
+    description: >
+      Traits that describe the usage or function of structured data,
+      that aren't strongly associated with any other more descriptive
+      namespace.
+    members:
+      Project:
+        description: >
+          The top-level entity providing a Katana recipe, typically in a
+          `.katana` file.
+        usage:
+          - entity
+      LookFile:
+        description: >
+          A partial scene graph that can be imported for reuse across
+          multiple projects.
+        usage:
+          - entity
+      Macro:
+        description: >
+          A pre-configured node (or group of nodes) that can be imported
+          and reused across multiple projects.
+        usage:
+          - entity
+      SceneGraphBookmarks:
+        description: >
+          Bookmarks for a Katana Scene Graph tab.
+        usage:
+          - entity
+  nodes:
+    description: >
+      Traits for entities related to specific Katana nodes.
+    members:
+      LiveGroup:
+        description: >
+          A node graph subgraph that can be reused and synchronized
+          across multiple projects.
+        usage:
+          - entity
+      LookFileManager:
+        description: >
+          A node that can be used to add overrides to upstream look
+          files.
+        usage:
+          - entity
+      GafferThree:
+        description: >
+          The core node for adding lighting rigs to a Katana scene
+          graph.
+        usage:
+          - entity
+  timeDomain:
+    description: >
+      Traits that are concerned with describing how data changes or is
+      parameterised over time.
+    members:
+      FCurve:
+        description: >
+          A data structure containing a 1D curve for interpolating
+          numeric parameter values over a time window.
+        usage:
+          - entity
+  twoDimensional:
+    description: >
+      Traits that are concerned with describing two-dimensional data,
+      more colloquially known as 'images'.
+    members:
+      PresetResolution:
+        description: >
+          The two-dimensional data conforms to a Katana preset
+          resolution and aspect ratio from its built-in format table.
+        properties:
+          presetName:
+            description: >
+              The name of the resolution preset.
+            type: string
+        usage:
+          - entity
