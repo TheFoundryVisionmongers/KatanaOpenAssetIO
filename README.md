@@ -171,6 +171,40 @@ ctest --test-dir build
 where `build` is the build directory used when configuring/building
 the project.
 
+## Katana-specific traits and MIME types
+
+The MediaCreation traits library and official (IANA/XDG) MIME listings
+are insufficient to fully describe Katana-specific entities. So when
+publishing assets, KatanaOpenAssetIO will furnish the entity trait data
+with Katana-specific traits and MIME types.
+
+For the custom Katana-specific OpenAssetIO traits, see [traits.yml](src/traits.yml).
+These traits are entirely opt-in - they simply provide slightly more
+fine-grained categorisation of entities.
+
+MIME types have been invented for this project where there are no
+documented MIME types available. The `LocatableContent` trait's
+`mimeType` property will be imbued with the appropriate MIME type when
+publishing. 
+
+A listing of the non-standard MIME types in use follows:
+
+| Description              | File extension | MIME type                                                   |
+|--------------------------|----------------|-------------------------------------------------------------|
+| Katana project           | katana         | application/vnd.foundry.katana.project                      |
+| Live Group               | livegroup      | application/vnd.foundry.katana.livegroup+xml                |
+| Look file archive        | klf            | application/vnd.foundry.katana.lookfile                     |
+| LookFileManager settings | lfmexport      | application/vnd.foundry.katana.lookfilemanager-settings+xml |
+| GafferThree rig          | rig            | application/vnd.foundry.katana.rig+xml                      |
+| Macro                    | macro          | application/vnd.foundry.katana.macro                        |
+| FCurve                   | fcurve         | application/vnd.foundry.katana.fcurve+xml                   |
+| Scene Graph bookmarks    | xml            | application/vnd.foundry.katana.scenegraph-bookmarks+xml     |
+| Deep EXR images          | deepexr        | image/x-exr                                                 |
+| RLA images               | rla            | image/x-rla                                                 |
+| DTEX images              | dtex           | image/x-dtex                                                |
+| Deepshad images          | deepshad       | image/x-deepshad                                            |
+| Histogram                | hist           | application/vnd.foundry.katana.histogram+xml                |
+
 ## Limitations
 
 This project is still work in progress.
