@@ -171,6 +171,36 @@ ctest --test-dir build
 where `build` is the build directory used when configuring/building
 the project.
 
+## Publishing quirks
+
+Katana's AssetAPI is much more opinionated than OpenAssetIO with respect
+to how an asset management system is expected to behave, especially with
+regard to publishing. As such, some aspects of publishing from Katana
+are particularly difficult to map from its AssetAPI to OpenAssetIO in a
+generic way.
+
+This repo includes patches that decorate some of Katana's Python
+functions to conform better to OpenAssetIO, but this only get us so far.
+
+### Batch renders
+
+Batch renders (`katana --batch`) use a three-step process to publish via
+Katana's AssetAPI, each step being a separate command-line invocation.
+I.e. execute with `--prerender-publish` -> perform render ->
+`--postrender-publish`.
+
+Since the Katana project is not saved between these invocations, the
+"working" entity reference returned from OpenAssetIO's `preflight()`
+method (retrieved in the `prerender-publish` step) is lost, and so is
+not used to resolve destination paths in the main render invocation.
+
+Instead, the target entity reference (set in a `RenderOutputDefine`
+node) will be resolved with a `kRead` access mode, to get a writeable
+destination path.
+
+This breaks the OpenAssetIO contract. However, some asset management
+systems may still work fine with this limitation.
+
 ## Katana-specific traits and MIME types
 
 The MediaCreation traits library and official (IANA/XDG) MIME listings
