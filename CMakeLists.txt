@@ -1,5 +1,5 @@
 # KatanaOpenAssetIO
-# Copyright (c) 2024 The Foundry Visionmongers Ltd
+# Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 # SPDX-License-Identifier: Apache-2.0
 
 # Policies --------------------------------------------------------------------
@@ -24,6 +24,16 @@ option(
 option(
     KATANAOPENASSETIO_ENABLE_UI_DELEGATE
     "Enable 'Asset' browser - a simple text box alternative to the file browser"
+    ON
+)
+option(
+    KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO
+    "Enable Render node 'Pre-Render Publish Asset' patch to retain the preflight() reference"
+    ON
+)
+option(
+    KATANAOPENASSETIO_ENABLE_TESTS
+    "Enable unit tests. Requires Katana license and Python development install."
     OFF
 )
 
@@ -36,3 +46,9 @@ add_subdirectory(src)
 
 # Packaging -------------------------------------------------------------------
 include(cmake/installers.cmake)
+
+# Tests -------------------------------------------------------------------
+if (KATANAOPENASSETIO_ENABLE_TESTS)
+    enable_testing()
+    add_subdirectory(tests)
+endif()

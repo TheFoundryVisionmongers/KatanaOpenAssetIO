@@ -107,6 +107,8 @@ KatanaOpenAssetIO is known to build with:
   v1.0.0-rc.1.0.
 - [OpenAssetIO-MediaCreation](https://github.com/OpenAssetIO/OpenAssetIO-MediaCreation)
   v1.0.0-alpha.11.
+- [OpenAssetIO-TraitGen](https://github.com/OpenAssetIO/OpenAssetIO-TraitGen)
+  v1.0.0-alpha.11.
 - [Katana](https://www.foundry.com/products/katana) 7.0v4.
 - CPython 3.10.
 - CMake 3.26.
@@ -137,11 +139,101 @@ the above.
 
 ### CMake variables
 
-| Name                                        | Description                                                                | Default |
-|---------------------------------------------|----------------------------------------------------------------------------|---------|
-| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS     | Enable a large set of compiler warnings for project targets                | ON      |
-| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING | Enable security hardening features for project targets                     | ON      |
-| KATANAOPENASSETIO_ENABLE_UI_DELEGATE        | Enable 'Asset' browser - a simple text box alternative to the file browser | ON      |
+| Name                                          | Description                                                         | Default |
+|-----------------------------------------------|---------------------------------------------------------------------|---------|
+| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS       | Enable a large set of compiler warnings for project targets         | ON      |
+| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING   | Enable security hardening features for project targets              | ON      |
+| KATANAOPENASSETIO_ENABLE_UI_DELEGATE          | Enable text box 'browser' alternative and Render node output widget | ON      |
+| KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO | Enable Startup script patching Render node 'Pre-Render' option      | ON      |
+| KATANAOPENASSETIO_ENABLE_TESTS                | Enable unit tests (additional dependencies required)                | OFF     |
+
+## Running tests
+
+Tests must be enabled by setting `KATANAOPENASSETIO_ENABLE_TESTS=ON` in
+the CMake configure stage.
+
+The tests have additional dependencies. They are known to build with
+
+- [Catch2](https://github.com/catchorg/Catch2) v3.5.1
+- [pybind11](https://pybind11.readthedocs.io/en/stable/) v2.9.2
+- Python 3.11 (development package)
+
+Additionally, the tests use the [Basic Asset Library](https://github.com/OpenAssetIO/OpenAssetIO-Manager-BAL)
+fake/mock asset manager in the Python environment. This will be
+downloaded and installed by the test runner, see [requirements.txt](tests/resources/requirements.txt).
+
+The test environment is configured by CMake's [CTest](https://cmake.org/cmake/help/latest/manual/ctest.1.html).
+
+The tests can be run using
+```
+ctest --test-dir build
+```
+where `build` is the build directory used when configuring/building
+the project.
+
+## Publishing quirks
+
+Katana's AssetAPI is much more opinionated than OpenAssetIO with respect
+to how an asset management system is expected to behave, especially with
+regard to publishing. As such, some aspects of publishing from Katana
+are particularly difficult to map from its AssetAPI to OpenAssetIO in a
+generic way.
+
+This repo includes patches that decorate some of Katana's Python
+functions to conform better to OpenAssetIO, but this only get us so far.
+
+### Batch renders
+
+Batch renders (`katana --batch`) use a three-step process to publish via
+Katana's AssetAPI, each step being a separate command-line invocation.
+I.e. execute with `--prerender-publish` -> perform render ->
+`--postrender-publish`.
+
+Since the Katana project is not saved between these invocations, the
+"working" entity reference returned from OpenAssetIO's `preflight()`
+method (retrieved in the `prerender-publish` step) is lost, and so is
+not used to resolve destination paths in the main render invocation.
+
+Instead, the target entity reference (set in a `RenderOutputDefine`
+node) will be resolved with a `kRead` access mode, to get a writeable
+destination path.
+
+This breaks the OpenAssetIO contract. However, some asset management
+systems may still work fine with this limitation.
+
+## Katana-specific traits and MIME types
+
+The MediaCreation traits library and official (IANA/XDG) MIME listings
+are insufficient to fully describe Katana-specific entities. So when
+publishing assets, KatanaOpenAssetIO will furnish the entity trait data
+with Katana-specific traits and MIME types.
+
+For the custom Katana-specific OpenAssetIO traits, see [traits.yml](src/traits.yml).
+These traits are entirely opt-in - they simply provide slightly more
+fine-grained categorisation of entities.
+
+MIME types have been invented for this project where there are no
+documented MIME types available. The `LocatableContent` trait's
+`mimeType` property will be imbued with the appropriate MIME type when
+publishing. 
+
+A listing of the non-standard MIME types in use follows:
+
+| Description              | File extension | MIME type                                                   |
+|--------------------------|----------------|-------------------------------------------------------------|
+| Katana project           | katana         | application/vnd.foundry.katana.project                      |
+| Live Group               | livegroup      | application/vnd.foundry.katana.livegroup+xml                |
+| Look file archive        | klf            | application/vnd.foundry.katana.lookfile                     |
+| LookFileManager settings | lfmexport      | application/vnd.foundry.katana.lookfilemanager-settings+xml |
+| GafferThree rig          | rig            | application/vnd.foundry.katana.rig+xml                      |
+| Macro                    | macro          | application/vnd.foundry.katana.macro                        |
+| FCurve                   | fcurve         | application/vnd.foundry.katana.fcurve+xml                   |
+| Scene Graph bookmarks    | xml            | application/vnd.foundry.katana.scenegraph-bookmarks+xml     |
+| Deep EXR images          | deepexr        | image/x-exr                                                 |
+| RLA images               | rla            | image/x-rla                                                 |
+| DTEX images              | dtex           | image/x-dtex                                                |
+| Deepshad images          | deepshad       | image/x-deepshad                                            |
+| Histogram                | hist           | application/vnd.foundry.katana.histogram+xml                |
 
 ## Limitations
 
@@ -152,7 +244,7 @@ This project is still work in progress.
   available.
 * Similarly, there is functionality available in OpenAssetIO that is not
   yet exposed through Katana's AssetAPI.
-* The OpenAssetIO equivalent to Katana Widget Delegates is still
+* Integration of OpenAssetIO UI delegate plugins is still
   work-in-progress, so any UI delegation desired by an asset system
   integration must be bespoke for Katana, for now.
 

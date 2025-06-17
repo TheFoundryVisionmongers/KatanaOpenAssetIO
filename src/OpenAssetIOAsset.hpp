@@ -3,8 +3,10 @@
 // SPDX-License-Identifier: Apache-2.0
 #pragma once
 
+#include <memory>
 #include <optional>
 #include <string>
+#include <utility>
 
 #include <FnAsset/plugin/FnAsset.h>
 
@@ -284,14 +286,19 @@ public:
                          std::string& assetId) override;
 
 private:
-    std::optional<openassetio::EntityReference> entityRefForAssetIdAndVersion(
+    [[nodiscard]] std::optional<openassetio::EntityReference> entityRefForAssetIdAndVersion(
         const std::string& assetId,
         const std::string& desiredVersionTag) const;
 
-    PublishStrategies publishStrategies_;
+    [[nodiscard]] std::pair<openassetio::EntityReference, std::string>
+    assetIdToEntityRefAndManagerDrivenValue(const std::string& assetId) const;
 
-    openassetio::hostApi::HostInterfacePtr hostInterface_;
+    openassetio::log::LoggerInterfacePtr logger_;
     openassetio::hostApi::ManagerPtr manager_;
     openassetio::ContextPtr context_;
-    openassetio::utils::FileUrlPathConverter fileUrlPathConverter_;
+
+    using FileUrlPathConverterPtr = std::shared_ptr<openassetio::utils::FileUrlPathConverter>;
+    FileUrlPathConverterPtr fileUrlPathConverter_{
+        std::make_shared<openassetio::utils::FileUrlPathConverter>()};
+    PublishStrategies publishStrategies_{fileUrlPathConverter_};
 };
