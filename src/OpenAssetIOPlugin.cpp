@@ -1,24 +1,27 @@
 // KatanaOpenAssetIO
-// Copyright (c) 2024 The Foundry Visionmongers Ltd
+// Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 // SPDX-License-Identifier: Apache-2.0
-#include <Python.h>
-
-#include <algorithm>
-#include <iostream>
-#include <memory>
-#include <sstream>
-
-#ifndef _WIN32
-#include <pwd.h>
-#endif
-
-#include "Utilities.hpp"
-#include "config.hpp"
-
-#include "Constants.hpp"
-#include "KatanaHostInterface.hpp"
 #include "OpenAssetIOAsset.hpp"
 
+#include <algorithm>
+#include <cstdlib>
+#include <exception>
+#include <ios>
+#include <iterator>
+#include <memory>
+#include <optional>
+#include <sstream>
+#include <stdexcept>
+#include <utility>
+#include <variant>
+
+#include <FnAsset/FnDefaultFileSequencePlugin.h>
+#include <FnAsset/plugin/FnAsset.h>
+#include <FnAsset/suite/FnAssetSuite.h>
+#include <FnLogging/FnLogging.h>
+#include <FnPluginSystem/FnPlugin.h>
+
+#include <openassetio/EntityReference.hpp>
 #include <openassetio/access.hpp>
 #include <openassetio/constants.hpp>
 #include <openassetio/errors/exceptions.hpp>
@@ -28,15 +31,21 @@
 #include <openassetio/pluginSystem/HybridPluginSystemManagerImplementationFactory.hpp>
 #include <openassetio/python/hostApi.hpp>
 #include <openassetio/trait/TraitsData.hpp>
-
-#include <openassetio_mediacreation/openassetio_mediacreation.hpp>
-
+#include <openassetio/trait/property.hpp>
+#include <openassetio/typedefs.hpp>
 #include <openassetio/utils/path.hpp>
 
-#include <FnAsset/FnDefaultFileSequencePlugin.h>
-#include <FnLogging/FnLogging.h>
+#include <openassetio_mediacreation/specifications/lifecycle/EntityVersionsRelationshipSpecification.hpp>
+#include <openassetio_mediacreation/traits/content/LocatableContentTrait.hpp>
+#include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
+#include <openassetio_mediacreation/traits/lifecycle/VersionTrait.hpp>
+#include <openassetio_mediacreation/traits/managementPolicy/ManagedTrait.hpp>
+#include <openassetio_mediacreation/traits/threeDimensional/SourcePathTrait.hpp>
 
-#include <FnAttribute/FnAttribute.h>
+#include "KatanaHostInterface.hpp"
+#include "PublishStrategies.hpp"
+#include "config.hpp"
+#include "constants.hpp"
 
 FnLogSetup("OpenAssetIO");
 
@@ -73,7 +82,7 @@ struct KatanaLoggerInterface : openassetio::log::LoggerInterface
 };
 
 constexpr char kAssetFieldKeySep = '_';
-constexpr const char* kDisablePythonEnvVar = "KATANAOPENASSETIO_DISABLE_PYTHON";
+constexpr auto kDisablePythonEnvVar = "KATANAOPENASSETIO_DISABLE_PYTHON";
 }  // namespace
 
 OpenAssetIOAsset::OpenAssetIOAsset()
@@ -93,14 +102,14 @@ void OpenAssetIOAsset::reset()
 
     try
     {
-        _hostInterface = std::make_shared<KatanaHostInterface>();
+        hostInterface_ = std::make_shared<KatanaHostInterface>();
         const auto logger = std::make_shared<KatanaLoggerInterface>();
 
         // Create the appropriate plugin system.
         const auto managerImplFactory = [&]() -> ManagerImplementationFactoryInterfacePtr
         {
-            const char* disablePythonEnvVar = std::getenv(kDisablePythonEnvVar);
-            if (disablePythonEnvVar && std::string_view{disablePythonEnvVar} != "0")
+            if (const char* disablePythonEnvVar = std::getenv(kDisablePythonEnvVar);
+                disablePythonEnvVar && std::string_view{disablePythonEnvVar} != "0")
             {
                 // User has chosen to disable Python manager plugins. So
                 // just use the C++ plugin system.
@@ -116,16 +125,16 @@ void OpenAssetIOAsset::reset()
                 logger);
         }();
 
-        _manager =
-            ManagerFactory::defaultManagerForInterface(_hostInterface, managerImplFactory, logger);
+        manager_ =
+            ManagerFactory::defaultManagerForInterface(hostInterface_, managerImplFactory, logger);
 
-        if (!_manager)
+        if (!manager_)
         {
             throw openassetio::errors::ConfigurationException{
                 "No default OpenAssetIO manager configured. Set OPENASSETIO_DEFAULT_CONFIG."};
         }
 
-        _context = _manager->createContext();
+        context_ = manager_->createContext();
     }
     catch (const std::exception& exc)
     {
@@ -136,7 +145,7 @@ void OpenAssetIOAsset::reset()
 
 std::optional<openassetio::EntityReference> OpenAssetIOAsset::entityRefForAssetIdAndVersion(
     const std::string& assetId,
-    const std::string& desiredVersionTag)
+    const std::string& desiredVersionTag) const
 {
     // The "specifiedTag" property of the "Version" trait, when used in
     // a relationship query, acts as a filter predicate. We assume that
@@ -159,7 +168,7 @@ std::optional<openassetio::EntityReference> OpenAssetIOAsset::entityRefForAssetI
 
     // Validate the asset ID and get a strongly typed wrapper for
     // subsequent queries.
-    const EntityReference sourceEntityRef = _manager->createEntityReference(assetId);
+    const EntityReference sourceEntityRef = manager_->createEntityReference(assetId);
 
     // Relationship to get references to different versions of
     // the same logical entity.
@@ -172,11 +181,11 @@ std::optional<openassetio::EntityReference> OpenAssetIOAsset::entityRefForAssetI
     constexpr std::size_t kNumExpectedResults = 1;
 
     // Get references that point to the given version of the asset.
-    const auto versionsPager = _manager->getWithRelationship(sourceEntityRef,
+    const auto versionsPager = manager_->getWithRelationship(sourceEntityRef,
                                                              relationship.traitsData(),
                                                              kNumExpectedResults,
                                                              RelationsAccess::kRead,
-                                                             _context,
+                                                             context_,
                                                              {});
     if (versionsPager->hasNext())
     {
@@ -202,14 +211,15 @@ std::optional<openassetio::EntityReference> OpenAssetIOAsset::entityRefForAssetI
 
 bool OpenAssetIOAsset::isAssetId(const std::string& name)
 {
-    const auto result = _manager->isEntityReferenceString(name);
+    const auto result = manager_->isEntityReferenceString(name);
     return result;
 }
 
-bool OpenAssetIOAsset::containsAssetId(const std::string& id)
+bool OpenAssetIOAsset::containsAssetId(const std::string& name)
 {
-    using namespace openassetio::constants;
-    const auto info = _manager->info();
+    using openassetio::constants::kInfoKey_EntityReferencesMatchPrefix;
+    const auto info = manager_->info();
+    // NOLINTNEXTLINE(*-suspicious-stringview-data-usage)
     const auto prefixKey = info.find(kInfoKey_EntityReferencesMatchPrefix.data());
     if (prefixKey == info.end())
     {
@@ -217,22 +227,23 @@ bool OpenAssetIOAsset::containsAssetId(const std::string& id)
     }
 
     const auto prefix = std::get<std::string>(prefixKey->second);
-    return id.find(prefix) != std::string::npos;
+    return name.find(prefix) != std::string::npos;
 }
 
 bool OpenAssetIOAsset::checkPermissions(const std::string& assetId, const StringMap& context)
 {
-    // TODO: Implement checkPermissions()
+    // TODO(DH): Implement checkPermissions()
     (void)assetId;
     (void)context;
     return true;
 }
 
+// NOLINTNEXTLINE(*-easily-swappable-parameters)
 bool OpenAssetIOAsset::runAssetPluginCommand(const std::string& assetId,
                                              const std::string& command,
                                              const StringMap& commandArgs)
 {
-    // TODO: Implement runAssetPluginCommand()
+    // TODO(DH): Implement runAssetPluginCommand()
     (void)assetId;
     (void)command;
     (void)commandArgs;
@@ -246,22 +257,22 @@ void OpenAssetIOAsset::resolveAsset(const std::string& assetId, std::string& res
 
     // We don't know anything else about the asset other than its ID at this
     // point so attempt to resolve given only the LocatableContentTrait.
-    const auto entityReference = _manager->createEntityReference(assetId);
-    const auto traitData = _manager->resolve(
-        entityReference, {LocatableContentTrait::kId}, ResolveAccess::kRead, _context);
+    const auto entityReference = manager_->createEntityReference(assetId);
+    const auto traitData = manager_->resolve(
+        entityReference, {LocatableContentTrait::kId}, ResolveAccess::kRead, context_);
     const auto url = LocatableContentTrait(traitData).getLocation();
 
     if (!url)
     {
         throw std::runtime_error{assetId + " has no location"};
     }
-    resolvedAsset = _fileUrlPathConverter.pathFromUrl(*url);
+    resolvedAsset = fileUrlPathConverter_.pathFromUrl(*url);
 }
 
-void OpenAssetIOAsset::resolveAllAssets(const std::string& id, std::string& assets)
+void OpenAssetIOAsset::resolveAllAssets(const std::string& str, std::string& ret)
 {
-    // TODO: Implement resolveAllAssets() - I don't understand this function
-    resolveAsset(id, assets);
+    // TODO(DH): Implement resolveAllAssets()
+    resolveAsset(str, ret);
 }
 
 void OpenAssetIOAsset::resolvePath(const std::string& str, const int frame, std::string& ret)
@@ -288,7 +299,7 @@ void OpenAssetIOAsset::resolveAssetVersion(const std::string& assetId,
         {
             // No alternate version, so we want to query the version
             // tag associated with the given entity.
-            return _manager->createEntityReference(assetId);
+            return manager_->createEntityReference(assetId);
         }
 
         // Alternate version given, so we need to query the version tag
@@ -310,7 +321,7 @@ void OpenAssetIOAsset::resolveAssetVersion(const std::string& assetId,
     // We don't have any other information about the asset other than its EntityReference so
     // request the VersionTrait.
     const auto traitData =
-        _manager->resolve(entityReference, {VersionTrait::kId}, ResolveAccess::kRead, _context);
+        manager_->resolve(entityReference, {VersionTrait::kId}, ResolveAccess::kRead, context_);
 
     // Usage by the Importomatic node implies "stableTag" is what we
     // want here - its parameters panel has a column for "Version" and a
@@ -324,9 +335,9 @@ void OpenAssetIOAsset::getAssetDisplayName(const std::string& assetId, std::stri
     using openassetio::access::ResolveAccess;
     using openassetio_mediacreation::traits::identity::DisplayNameTrait;
 
-    const auto entityReference = _manager->createEntityReference(assetId);
+    const auto entityReference = manager_->createEntityReference(assetId);
     const auto traitData =
-        _manager->resolve(entityReference, {DisplayNameTrait::kId}, ResolveAccess::kRead, _context);
+        manager_->resolve(entityReference, {DisplayNameTrait::kId}, ResolveAccess::kRead, context_);
 
     ret = DisplayNameTrait{traitData}.getName("");
 }
@@ -341,12 +352,12 @@ void OpenAssetIOAsset::getAssetVersions(const std::string& assetId, StringVector
 
     // Get all related references, such that each reference points to a
     // different version of the same asset.
-    auto entityRefPager = _manager->getWithRelationship(
-        _manager->createEntityReference(assetId),
+    const auto entityRefPager = manager_->getWithRelationship(
+        manager_->createEntityReference(assetId),
         EntityVersionsRelationshipSpecification::create().traitsData(),
-        Constants::kPageSize,
+        constants::kPageSize,
         RelationsAccess::kRead,
-        _context,
+        context_,
         {});
 
     openassetio::EntityReferences entityRefs;
@@ -357,15 +368,12 @@ void OpenAssetIOAsset::getAssetVersions(const std::string& assetId, StringVector
     {
         copy(cbegin(entityRefPage), cend(entityRefPage), back_inserter(entityRefs));
         entityRefPager->next();
-    };
+    }
 
     // Batch `resolve` to get version metadata associated with each
     // entity reference.
     const auto traitsDatas =
-        _manager->resolve(entityRefs,
-                          {openassetio_mediacreation::traits::lifecycle::VersionTrait::kId},
-                          openassetio::access::ResolveAccess::kRead,
-                          _context);
+        manager_->resolve(entityRefs, {VersionTrait::kId}, ResolveAccess::kRead, context_);
 
     // Extract and return the version "specified tag", i.e. version tag
     // potentially including meta-versions such as "latest".
@@ -376,7 +384,7 @@ void OpenAssetIOAsset::getAssetVersions(const std::string& assetId, StringVector
 }
 
 void OpenAssetIOAsset::getUniqueScenegraphLocationFromAssetId(const std::string& assetId,
-                                                              bool includeVersion,
+                                                              const bool includeVersion,
                                                               std::string& ret)
 {
     using openassetio::access::ResolveAccess;
@@ -387,14 +395,14 @@ void OpenAssetIOAsset::getUniqueScenegraphLocationFromAssetId(const std::string&
     const auto traits = includeVersion ? TraitSet{VersionTrait::kId, SourcePathTrait::kId}
                                        : TraitSet{SourcePathTrait::kId};
 
-    const auto traitsData = _manager->resolve(
-        _manager->createEntityReference(assetId), traits, ResolveAccess::kRead, _context);
+    const auto traitsData = manager_->resolve(
+        manager_->createEntityReference(assetId), traits, ResolveAccess::kRead, context_);
 
     ret = SourcePathTrait{traitsData}.getPath("/");
 
     if (includeVersion)
     {
-        if (auto versionTag = VersionTrait{traitsData}.getStableTag())
+        if (const auto versionTag = VersionTrait{traitsData}.getStableTag())
         {
             ret += "/";
             ret += *versionTag;
@@ -402,18 +410,19 @@ void OpenAssetIOAsset::getUniqueScenegraphLocationFromAssetId(const std::string&
     }
 }
 
+// NOLINTNEXTLINE(*-easily-swappable-parameters)
 void OpenAssetIOAsset::getRelatedAssetId(const std::string& assetId,
                                          const std::string& relation,
                                          std::string& ret)
 {
-    // TODO: Implement getRelatedAssetId()
+    // TODO(DH): Implement getRelatedAssetId()
     (void)assetId;
     (void)relation;
     ret = "";
 }
 
 void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
-                                      bool includeDefaults,
+                                      const bool includeDefaults,
                                       StringMap& returnFields)
 {
     (void)includeDefaults;  // TODO(DF): How should we use this?
@@ -423,15 +432,15 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
     using openassetio_mediacreation::traits::identity::DisplayNameTrait;
     using openassetio_mediacreation::traits::lifecycle::VersionTrait;
 
-    const auto entityReference = _manager->createEntityReference(assetId);
+    const auto entityReference = manager_->createEntityReference(assetId);
 
-    const auto traitsData = _manager->resolve(entityReference,
+    const auto traitsData = manager_->resolve(entityReference,
                                               {DisplayNameTrait::kId, VersionTrait::kId},
                                               ResolveAccess::kRead,
-                                              _context);
+                                              context_);
 
     // Katana's AssetAPI only standardises Name & Version fields.
-    returnFields[Constants::kAssetId] = assetId;
+    returnFields[constants::kAssetId] = assetId;
     returnFields[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
     returnFields[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 }
@@ -449,7 +458,7 @@ void OpenAssetIOAsset::buildAssetId(const StringMap& fields, std::string& ret)
     const std::string assetId = [&]
     {
         // getAssetFields populates __assetId.
-        if (const auto assetIdIt = fields.find(Constants::kAssetId); assetIdIt != fields.end())
+        if (const auto assetIdIt = fields.find(constants::kAssetId); assetIdIt != fields.end())
         {
             return assetIdIt->second;
         }
@@ -482,6 +491,7 @@ void OpenAssetIOAsset::buildAssetId(const StringMap& fields, std::string& ret)
     ret = versionedAssetId.value_or(assetId);
 }
 
+// NOLINTNEXTLINE(*-easily-swappable-parameters)
 void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
                                           [[maybe_unused]] const std::string& scope,
                                           StringMap& returnAttrs)
@@ -496,10 +506,10 @@ void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
     using openassetio_mediacreation::traits::identity::DisplayNameTrait;
     using openassetio_mediacreation::traits::lifecycle::VersionTrait;
 
-    const auto entityReference = _manager->createEntityReference(assetId);
+    const auto entityReference = manager_->createEntityReference(assetId);
 
     // Find out what the asset management system knows about this asset.
-    auto traitSet = _manager->entityTraits(entityReference, EntityTraitsAccess::kRead, _context);
+    auto traitSet = manager_->entityTraits(entityReference, EntityTraitsAccess::kRead, context_);
 
     // Augment with DisplayName and Version if it isn't specified already for Katana's
     // specified fields
@@ -509,11 +519,11 @@ void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
     using openassetio::access::ResolveAccess;
 
     const auto traitsData =
-        _manager->resolve(entityReference, traitSet, ResolveAccess::kRead, _context);
+        manager_->resolve(entityReference, traitSet, ResolveAccess::kRead, context_);
 
     // Katana's AssetAPI only standardises Name & Version fields.
     // TODO(DH): Specify set of other well known fields?
-    returnAttrs[Constants::kAssetId] = assetId;
+    returnAttrs[constants::kAssetId] = assetId;
     returnAttrs[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
     returnAttrs[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 
@@ -542,30 +552,33 @@ void OpenAssetIOAsset::getAssetAttributes(const std::string& assetId,
     }
 }
 
+// NOLINTNEXTLINE(*-easily-swappable-parameters)
 void OpenAssetIOAsset::setAssetAttributes(const std::string& assetId,
                                           const std::string& scope,
                                           const StringMap& attrs)
 {
-    // TODO: Implement setAssetAttributes()
+    // TODO(DH): Implement setAssetAttributes()
     (void)assetId;
     (void)scope;
     (void)attrs;
 }
 
+// NOLINTNEXTLINE(*-easily-swappable-parameters)
 void OpenAssetIOAsset::getAssetIdForScope(const std::string& assetId,
                                           const std::string& scope,
                                           std::string& ret)
 {
-    // TODO: Implement getAssetIdForScope()
+    // TODO(DH): Implement getAssetIdForScope()
     (void)scope;
     ret = assetId;
 }
 
 void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
                                           const std::string& assetType,
+                                          // NOLINTNEXTLINE(*-easily-swappable-parameters)
                                           const StringMap& assetFields,
                                           const StringMap& args,
-                                          bool createDirectory,
+                                          const bool createDirectory,
                                           std::string& assetId)
 {
     // `assetFields` comes from `getAssetFields`, with no mutations.
@@ -602,40 +615,41 @@ void OpenAssetIOAsset::createAssetAndPath(FnKat::AssetTransaction* txn,
     {
         throw std::runtime_error("AssetAPI transactions not yet supported.");
     }
-    const auto assetIdIt = assetFields.find(Constants::kAssetId);
+    const auto assetIdIt = assetFields.find(constants::kAssetId);
     if (assetIdIt == assetFields.end())
     {
         throw std::runtime_error("Existing assetId not specified in publish");
     }
 
-    using namespace openassetio_mediacreation::traits::managementPolicy;
+    using openassetio_mediacreation::traits::managementPolicy::ManagedTrait;
 
-    const PublishStrategy& strategy = _publishStrategies.strategyForAssetType(assetType);
+    const PublishStrategy& strategy = publishStrategies_.strategyForAssetType(assetType);
 
-    const auto entityPolicy = _manager->managementPolicy(
-        strategy.assetTraitSet(), openassetio::access::PolicyAccess::kWrite, _context);
+    const auto entityPolicy = manager_->managementPolicy(
+        strategy.assetTraitSet(), openassetio::access::PolicyAccess::kWrite, context_);
 
     if (!ManagedTrait::isImbuedTo(entityPolicy))
     {
         // TODO(DH): Attempt fallback to persist basic entity?
-        FnLogWarn("OpenAssetIO Manager '" + _manager->displayName() +
+        FnLogWarn("OpenAssetIO Manager '" + manager_->displayName() +
                   "' does not support trait specifiction.");
         throw std::runtime_error("Specification not supported.");
     }
 
     // Indicate to the Manager we wish to publish something via preflight
-    const auto existingAssetId = _manager->createEntityReference(assetIdIt->second);
+    const auto existingAssetId = manager_->createEntityReference(assetIdIt->second);
 
-    assetId = _manager
+    assetId = manager_
                   ->preflight(existingAssetId,
                               strategy.prePublishTraitData(args),
                               openassetio::access::PublishingAccess::kWrite,
-                              _context)
+                              context_)
                   .toString();
 }
 
 void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
                                        const std::string& assetType,
+                                       // NOLINTNEXTLINE(*-easily-swappable-parameters)
                                        const StringMap& assetFields,
                                        const StringMap& args,
                                        std::string& assetId)
@@ -645,15 +659,15 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
         throw std::runtime_error("AssetAPI transactions not yet supported.");
     }
     // getAssetFields re-populates this with our working entity reference.
-    const auto assetIdIt = assetFields.find(Constants::kAssetId);
+    const auto assetIdIt = assetFields.find(constants::kAssetId);
     if (assetIdIt == assetFields.cend())
     {
         throw std::runtime_error("Working EntityReference not specified in post-publish");
     }
 
-    const PublishStrategy& strategy = _publishStrategies.strategyForAssetType(assetType);
+    const PublishStrategy& strategy = publishStrategies_.strategyForAssetType(assetType);
 
-    const auto workingEntityReference = _manager->createEntityReferenceIfValid(assetIdIt->second);
+    const auto workingEntityReference = manager_->createEntityReferenceIfValid(assetIdIt->second);
     if (!workingEntityReference)
     {
         throw std::runtime_error(
@@ -661,11 +675,11 @@ void OpenAssetIOAsset::postCreateAsset(FnKat::AssetTransaction* txn,
             assetIdIt->second);
     }
 
-    assetId = _manager
+    assetId = manager_
                   ->register_(workingEntityReference.value(),
                               strategy.postPublishTraitData(args),
                               openassetio::access::PublishingAccess::kWrite,
-                              _context)
+                              context_)
                   .toString();
 }
 

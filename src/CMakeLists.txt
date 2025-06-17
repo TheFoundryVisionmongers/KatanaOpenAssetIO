@@ -1,12 +1,12 @@
 # KatanaOpenAssetIO
-# Copyright (c) 2024 The Foundry Visionmongers Ltd
+# Copyright (c) 2024-2025 The Foundry Visionmongers Ltd
 # SPDX-License-Identifier: Apache-2.0
 
 configure_file(config.hpp.in ${CMAKE_CURRENT_BINARY_DIR}/include/config.hpp)
 
 add_library(KatanaOpenAssetIOPlugin MODULE
     OpenAssetIOPlugin.cpp
-    Utilities.cpp
+    utilities.cpp
     PublishStrategies.cpp
 )
 
