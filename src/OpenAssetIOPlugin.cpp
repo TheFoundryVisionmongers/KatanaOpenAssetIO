@@ -18,6 +18,8 @@
 #include <utility>
 #include <variant>
 
+#include <Python.h>
+
 #include <FnAsset/FnDefaultFileSequencePlugin.h>
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
@@ -35,6 +37,7 @@
 #include <openassetio/log/LoggerInterface.hpp>
 #include <openassetio/pluginSystem/CppPluginSystemManagerImplementationFactory.hpp>
 #include <openassetio/pluginSystem/HybridPluginSystemManagerImplementationFactory.hpp>
+#include <openassetio/python/converter.hpp>
 #include <openassetio/python/hostApi.hpp>
 #include <openassetio/trait/TraitsData.hpp>
 #include <openassetio/trait/property.hpp>
@@ -336,6 +339,40 @@ bool OpenAssetIOAsset::runAssetPluginCommand(const std::string& assetId,
             }
             return false;
         }
+    }
+
+    if (command == "setManagerAndContextInPythonDict")
+    {
+        // Convert a CPython `id` number, stored in a string, to a PyObject
+        // pointer.
+        const auto pyIdStrToObj = [](const std::string& pyIdAsStr)
+        {
+            std::intptr_t pyId = 0;
+            std::stringstream sstr{pyIdAsStr};
+            sstr >> pyId;
+            // NOLINTNEXTLINE(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
+            return reinterpret_cast<PyObject*>(pyId);
+        };
+
+        PyObject* pyOutDict = pyIdStrToObj(commandArgs.at("outDictId"));
+        // Check if pyOutObj is a dict
+        if (!PyDict_Check(pyOutDict))
+        {
+            if (logger_->isSeverityLogged(Severity::kDebug))
+            {
+                logger_->debug(
+                    "OpenAssetIOAsset::runAssetPluginCommand -> ERROR: Invalid object type for "
+                    "output variable - must be dict");
+            }
+            return false;
+        }
+        PyObject* pySrcObj = openassetio::python::converter::castToPyObject(manager_);
+        PyDict_SetItemString(pyOutDict, "manager", pySrcObj);
+        Py_DECREF(pySrcObj);
+        pySrcObj = openassetio::python::converter::castToPyObject(context_);
+        PyDict_SetItemString(pyOutDict, "context", pySrcObj);
+        Py_DECREF(pySrcObj);
+        return true;
     }
     return true;
 }
