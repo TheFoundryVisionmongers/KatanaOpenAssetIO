@@ -3,16 +3,25 @@
 // SPDX-License-Identifier: Apache-2.0
 #include "PublishStrategies.hpp"
 
+#include <algorithm>
+#include <charconv>
+#include <filesystem>
+#include <limits>
 #include <memory>
+#include <optional>
 #include <set>
 #include <stdexcept>
 #include <string>
+#include <string_view>
+#include <system_error>
 #include <utility>
+#include <vector>
 
+#include <FnAsset/FnDefaultFileSequencePlugin.h>
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
+#include <pystring/pystring.h>
 
-#include <openassetio/trait/TraitsData.hpp>
 #include <openassetio/trait/collection.hpp>
 
 #include <openassetio_mediacreation/specifications/application/WorkfileSpecification.hpp>
@@ -22,6 +31,7 @@
 #include <openassetio_mediacreation/traits/color/OCIOColorManagedTrait.hpp>
 #include <openassetio_mediacreation/traits/content/LocatableContentTrait.hpp>
 #include <openassetio_mediacreation/traits/identity/DisplayNameTrait.hpp>
+#include <openassetio_mediacreation/traits/timeDomain/FrameRangedTrait.hpp>
 #include <openassetio_mediacreation/traits/twoDimensional/DeepTrait.hpp>
 
 #include <katana_openassetio/traits/application/LookFileTrait.hpp>
@@ -53,6 +63,7 @@ using openassetio_mediacreation::traits::application::ConfigTrait;
 using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
 using openassetio_mediacreation::traits::content::LocatableContentTrait;
 using openassetio_mediacreation::traits::identity::DisplayNameTrait;
+using openassetio_mediacreation::traits::timeDomain::FrameRangedTrait;
 using openassetio_mediacreation::traits::twoDimensional::DeepTrait;
 
 // Katana-specific custom traits - see traits.yml.
@@ -327,7 +338,8 @@ private:
         ConfigTrait::imbueTo(traitsData);
         LookFileManagerTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
-            .setMimeType("application/vnd.foundry.katana.lookfilemanager-settings+xml");  // Invented
+            .setMimeType(
+                "application/vnd.foundry.katana.lookfilemanager-settings+xml");  // Invented
     }
 };
 
@@ -506,6 +518,11 @@ struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResou
     {
         auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
         updateTraitsFromArgs(args, traitsData);
+        // Assume, optimistically, that we're going to render a range of
+        // frames. We can't know which frames at this point, though.
+        // We'll glob the directory later as part of
+        // `register()`/`postCreateAsset()` to get the frame range.
+        FrameRangedTrait::imbueTo(traitsData);
         return traitsData;
     }
 
@@ -516,6 +533,25 @@ struct ImageAssetPublisher final : MediaCreationPublishStrategy<BitmapImageResou
     {
         auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
         updateTraitsFromArgs(args, traitsData);
+
+        // Check if the entity reference has a manager driven value
+        // (path) encoded within it - see createAssetAndPath().
+        if (const auto managerDrivenValueIter =
+                fields.find(std::string{constants::kManagerDrivenValue});
+            managerDrivenValueIter != fields.end())
+        {
+            // Extract the frame range by globbing the path.
+            if (const auto maybeFrameRange =
+                    findFrameRangeFromSequenceOnDisk(managerDrivenValueIter->second))
+            {
+                FrameRangedTrait frameRangedTrait{traitsData};
+                frameRangedTrait.setStartFrame(maybeFrameRange->first);
+                frameRangedTrait.setEndFrame(maybeFrameRange->second);
+                frameRangedTrait.setInFrame(maybeFrameRange->first);
+                frameRangedTrait.setOutFrame(maybeFrameRange->second);
+            }
+        }
+
         return traitsData;
     }
 
@@ -571,6 +607,84 @@ private:
         {
             PresetResolutionTrait{traitsData}.setPresetName(keyAndValue->second);
         }
+    }
+
+    /**
+     * Find the range of frames in a file sequence on disk.
+     *
+     * Effectively globs the directory of the file sequence looking for
+     * files that match the default file sequence plugin's pattern, and
+     * extracts the min and max frame numbers found.
+     *
+     * @param fileSequence Path to a frame with a placeholder token in
+     * place of the frame number.
+     *
+     * @return A pair of min and max frame numbers, or std::nullopt if
+     * no sequence was found.
+     */
+    static std::optional<std::pair<int, int>> findFrameRangeFromSequenceOnDisk(
+        const std::string& fileSequence)
+    {
+        if (!FnKat::DefaultFileSequencePlugin::isFileSequence(fileSequence))
+        {
+            return std::nullopt;
+        }
+
+        // Create a dummy file path from the template, which we can then
+        // split to use for matching. The DefaultFileSequencePlugin does
+        // not otherwise provide access to the prefix/token/suffix.
+        constexpr int kTokenAsInt = 9999999;
+        constexpr std::string_view kTokenAsStr = "9999999";
+        const std::string exampleFrame =
+            FnKat::DefaultFileSequencePlugin::resolveFileSequence(fileSequence, kTokenAsInt, true);
+
+        const auto prefixAndSuffix = pystring::split_view(exampleFrame, kTokenAsStr, 1);
+
+        if (prefixAndSuffix.size() != 2)
+        {
+            return std::nullopt;
+        }
+
+        int minFrame = std::numeric_limits<int>::max();
+        int maxFrame = std::numeric_limits<int>::min();
+
+        // Loop over all files in the directory of the resolved path,
+        // looking for frames.
+        std::filesystem::path const directory =
+            std::filesystem::path{prefixAndSuffix[0]}.parent_path();
+        for (const auto& file : std::filesystem::directory_iterator(directory))
+        {
+            const std::string filePath = file.path().string();
+
+            if (file.is_regular_file() && pystring::startswith(filePath, prefixAndSuffix[0]) &&
+                pystring::endswith(filePath, prefixAndSuffix[1]))
+            {
+                const std::string_view frameStr = pystring::slice_view(
+                    filePath,
+                    static_cast<int>(prefixAndSuffix[0].size()),
+                    static_cast<int>(filePath.size() - prefixAndSuffix[1].size()));
+
+                int frameNum = 0;
+                const char *const begin = frameStr.data();
+                const char *const end = frameStr.data() + frameStr.size();
+                constexpr std::errc kSuccess{};
+
+                if (const auto result = std::from_chars(begin, end, frameNum);
+                    // Successful conversion that consumed the entire substring.
+                    result.ec == kSuccess && result.ptr == end)
+                {
+                    minFrame = std::min(minFrame, frameNum);
+                    maxFrame = std::max(maxFrame, frameNum);
+                }
+            }
+        }
+
+        if (minFrame > maxFrame)
+        {
+            return std::nullopt;
+        }
+
+        return std::pair{minFrame, maxFrame};
     }
 };
 }  // anonymous namespace
