@@ -709,17 +709,34 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
         (void)includeDefaults;  // TODO(DF): How should we use this?
 
         using openassetio::access::ResolveAccess;
+        using openassetio::trait::TraitsDataPtr;
         using openassetio::trait::TraitSet;
         using openassetio_mediacreation::traits::identity::DisplayNameTrait;
         using openassetio_mediacreation::traits::lifecycle::VersionTrait;
+        using BatchElementErrorPolicyTag =
+            openassetio::hostApi::Manager::BatchElementErrorPolicyTag;
 
         auto [entityReference, managerDrivenValue] =
             assetIdToEntityRefAndManagerDrivenValue(assetId);
 
-        const auto traitsData = manager_->resolve(entityReference,
-                                                  {DisplayNameTrait::kId, VersionTrait::kId},
-                                                  ResolveAccess::kRead,
-                                                  context_);
+        // Use a kVariant return type, so we can ignore errors - e.g.
+        // the entity might not exist (yet).
+        const auto maybeTraitsData = manager_->resolve(entityReference,
+                                                       {DisplayNameTrait::kId, VersionTrait::kId},
+                                                       ResolveAccess::kRead,
+                                                       context_,
+                                                       BatchElementErrorPolicyTag::kVariant);
+
+        if (TraitsDataPtr const* traitsData = std::get_if<TraitsDataPtr>(&maybeTraitsData))
+        {
+            returnFields[kFnAssetFieldName] = DisplayNameTrait{*traitsData}.getName("");
+            returnFields[kFnAssetFieldVersion] = VersionTrait{*traitsData}.getSpecifiedTag("");
+        }
+        else
+        {
+            returnFields[kFnAssetFieldName] = "";
+            returnFields[kFnAssetFieldVersion] = "";
+        }
 
         // Katana's AssetAPI only standardises Name & Version fields.
         returnFields[constants::kEntityReference] = entityReference.toString();
@@ -727,8 +744,6 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
         {
             returnFields[constants::kManagerDrivenValue] = std::move(managerDrivenValue);
         }
-        returnFields[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
-        returnFields[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {

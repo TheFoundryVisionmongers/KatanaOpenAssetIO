@@ -79,6 +79,31 @@ TEST_CASE("BAL plugin is loaded")
     CHECK_FALSE(plugin->isAssetId("notbal:///"));
 }
 
+SCENARIO("getAssetFields()")
+{
+    auto plugin = assetPluginInstance();
+
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_simple_image.json"}}));
+
+    GIVEN("an asset ID with no corresponding entity")
+    {
+        const std::string assetId = "bal:///notfound";
+
+        WHEN("getAssetFields is called")
+        {
+            FnKat::Asset::StringMap assetFields;
+            plugin->getAssetFields(assetId, true, assetFields);
+
+            THEN("asset fields are available but empty")
+            {
+                CHECK(assetFields[kFnAssetFieldName] == "");
+                CHECK(assetFields[kFnAssetFieldVersion] == "");
+            }
+        }
+    }
+}
+
 SCENARIO("getAssetDisplayName()")
 {
     auto plugin = assetPluginInstance();
