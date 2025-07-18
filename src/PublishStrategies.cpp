@@ -26,6 +26,7 @@
 
 #include <openassetio_mediacreation/specifications/application/WorkfileSpecification.hpp>
 #include <openassetio_mediacreation/specifications/threeDimensional/SceneLightingResourceSpecification.hpp>
+#include <openassetio_mediacreation/specifications/threeDimensional/SceneResourceSpecification.hpp>
 #include <openassetio_mediacreation/specifications/twoDimensional/BitmapImageResourceSpecification.hpp>
 #include <openassetio_mediacreation/traits/application/ConfigTrait.hpp>
 #include <openassetio_mediacreation/traits/color/OCIOColorManagedTrait.hpp>
@@ -58,6 +59,7 @@ using openassetio::trait::TraitsDataPtr;
 using openassetio_mediacreation::specifications::application::WorkfileSpecification;
 using openassetio_mediacreation::specifications::threeDimensional::
     SceneLightingResourceSpecification;
+using openassetio_mediacreation::specifications::threeDimensional::SceneResourceSpecification;
 using openassetio_mediacreation::specifications::twoDimensional::BitmapImageResourceSpecification;
 using openassetio_mediacreation::traits::application::ConfigTrait;
 using openassetio_mediacreation::traits::color::OCIOColorManagedTrait;
@@ -230,6 +232,7 @@ struct LiveGroupAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecificat
 private:
     static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        ConfigTrait::imbueTo(traitsData);
         LiveGroupTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.livegroup+xml");  // Invented
@@ -252,7 +255,7 @@ private:
  * We disambiguate between "as archive" and other formats using the
  * MIME type.
  */
-struct LookfileAssetPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
+struct LookfileAssetPublisher : MediaCreationPublishStrategy<SceneResourceSpecification>
 {
     using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
 
@@ -415,6 +418,7 @@ struct MacroPublisher : MediaCreationPublishStrategy<WorkfileSpecification>
 private:
     static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        ConfigTrait::imbueTo(traitsData);
         MacroTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.macro");  // Invented
@@ -455,6 +459,7 @@ struct FCurvePublisher : MediaCreationPublishStrategy<WorkfileSpecification>
 private:
     static void imbueTraitAndMimeType(const TraitsDataPtr& traitsData)
     {
+        ConfigTrait::imbueTo(traitsData);
         FCurveTrait::imbueTo(traitsData);
         LocatableContentTrait(traitsData)
             .setMimeType("application/vnd.foundry.katana.fcurve+xml");  // Invented
@@ -665,8 +670,8 @@ private:
                     static_cast<int>(filePath.size() - prefixAndSuffix[1].size()));
 
                 int frameNum = 0;
-                const char *const begin = frameStr.data();
-                const char *const end = frameStr.data() + frameStr.size();
+                const char* const begin = frameStr.data();
+                const char* const end = frameStr.data() + frameStr.size();
                 constexpr std::errc kSuccess{};
 
                 if (const auto result = std::from_chars(begin, end, frameNum);

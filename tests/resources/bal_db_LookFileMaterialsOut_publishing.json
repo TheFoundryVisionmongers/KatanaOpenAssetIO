@@ -17,7 +17,7 @@
         {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:application.Work": {},
+            "openassetio-mediacreation:threeDimensional.Spatial": {},
             "openassetio-mediacreation:identity.DisplayName": {
               "name": "Cat"
             },
@@ -32,7 +32,7 @@
         "write": {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:application.Work": {},
+            "openassetio-mediacreation:threeDimensional.Spatial": {},
             "openassetio-mediacreation:content.LocatableContent": {}
           }
         },
