@@ -386,6 +386,11 @@ void OpenAssetIOAsset::resolveAsset(const std::string& assetId, std::string& res
             logger_->debugApi(
                 logging::concatAsStr("OpenAssetIOAsset::resolveAsset(assetId=", assetId, ")"));
         }
+        if (!manager_->isEntityReferenceString(assetId))
+        {
+            resolvedAsset = assetId;
+            return;
+        }
 
         using openassetio::access::ResolveAccess;
         using openassetio_mediacreation::traits::content::LocatableContentTrait;
