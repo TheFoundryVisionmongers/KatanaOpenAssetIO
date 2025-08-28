@@ -351,8 +351,11 @@ class OpenKatanaAssetIOWidgetDelegate(
 
         mime_types = [
             {
-                "katana": "application/vnd.foundry.katana.project",
-                "klf": "application/vnd.foundry.katana.lookfile",
+                "katana": "application/vnd.foundry.katana.project",  # Invented.
+                "klf": "application/vnd.foundry.katana.lookfile",  # Invented.
+                "usda": "model/vnd.usda",  # IANA.
+                "usdz": "model/vnd.usdz+zip",  # IANA.
+                "usd": "model/vnd.usd",  # Invented (interestingly not in IANA).
             }.get(file_type, "application/octet-stream")
             for file_type in file_types
         ]
