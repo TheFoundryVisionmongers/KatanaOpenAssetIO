@@ -234,7 +234,7 @@ A listing of the non-standard MIME types in use follows:
 | DTEX images              | dtex           | image/x-dtex                                                |
 | Deepshad images          | deepshad       | image/x-deepshad                                            |
 | Histogram                | hist           | application/vnd.foundry.katana.histogram+xml                |
-
+| USD (non-usda/usdz)      | usd            | model/vnd.usd                                               |
 
 ## UI delegation
 

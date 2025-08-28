@@ -240,6 +240,57 @@ private:
 };
 
 /**
+ * Publish strategy for USD files.
+ *
+ * E.g. coming from UsdLayerExport.
+ */
+struct UsdAssetPublisher : MediaCreationPublishStrategy<SceneResourceSpecification>
+{
+    using MediaCreationPublishStrategy::MediaCreationPublishStrategy;
+
+    [[nodiscard]] TraitsDataPtr prePublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::prePublishTraitData(fields, args);
+        imbueTraitAndMimeType(args, traitsData);
+        return traitsData;
+    }
+
+    [[nodiscard]] TraitsDataPtr postPublishTraitData(
+        // NOLINTNEXTLINE(bugprone-easily-swappable-parameters)
+        const FnKat::Asset::StringMap& fields,
+        const FnKat::Asset::StringMap& args) const override
+    {
+        auto traitsData = MediaCreationPublishStrategy::postPublishTraitData(fields, args);
+        imbueTraitAndMimeType(args, traitsData);
+        return traitsData;
+    }
+
+private:
+    static inline const FnKat::Asset::StringMap kExtToMimeMap{
+        {"usda", "model/vnd.usda"},      // From IANA
+        {"usdz", "model/vnd.usdz+zip"},  // From IANA
+        {"usd", "model/vnd.usd"},        // Invented (interestingly not in IANA).
+    };
+    static void imbueTraitAndMimeType(const FnKat::Asset::StringMap& args,
+                                      const TraitsDataPtr& traitsData)
+    {
+        std::string mimeType = "model/vnd.usd";  // Default if no extension given/recognised.
+        if (const auto keyAndValue = args.find("fileExtension"); keyAndValue != cend(args))
+        {
+            if (const auto extAndMime = kExtToMimeMap.find(keyAndValue->second);
+                extAndMime != cend(kExtToMimeMap))
+            {
+                mimeType = extAndMime->second;
+            }
+        }
+        LocatableContentTrait{traitsData}.setMimeType(std::move(mimeType));
+    }
+};
+
+/**
  * Publish strategy for Katana LookFiles.
  *
  * By default, these can be published either as a .klf archive, or as a
@@ -698,6 +749,7 @@ PublishStrategies::PublishStrategies(const FileUrlPathConverterPtr& fileUrlPathC
 {
     strategies_[kFnAssetTypeKatanaScene] =
         std::make_unique<KatanaSceneAssetPublisher>(fileUrlPathConverter);
+    strategies_[kFnAssetTypeUsd] = std::make_unique<UsdAssetPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeMacro] = std::make_unique<MacroPublisher>(fileUrlPathConverter);
     strategies_[kFnAssetTypeLiveGroup] =
         std::make_unique<LiveGroupAssetPublisher>(fileUrlPathConverter);

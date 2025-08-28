@@ -1,0 +1,48 @@
+{
+  "managementPolicy": {
+    "read": {
+      "default": {
+        "openassetio-mediacreation:managementPolicy.Managed": {}
+      }
+    },
+    "write": {
+      "default": {
+        "openassetio-mediacreation:managementPolicy.Managed": {}
+      }
+    }
+  },
+  "entities": {
+    "cat": {
+      "versions": [
+        {
+          "traits": {
+            "openassetio-mediacreation:usage.Entity": {},
+            "openassetio-mediacreation:threeDimensional.Spatial": {
+              "name": "Cat"
+            },
+            "openassetio-mediacreation:content.LocatableContent": {
+              "location": "file:///some/permanent/storage/cat.v1.usd"
+            }
+          }
+        }
+      ],
+      "overrideByAccess": {
+        "__comment1": "Determines traits that must be provided to `preflight` and `register`, and returned from `entityTraits` with `kWrite` access mode. I.e. WorkfileSpecification",
+        "write": {
+          "traits": {
+            "openassetio-mediacreation:usage.Entity": {},
+            "openassetio-mediacreation:threeDimensional.Spatial": {}
+          }
+        },
+        "__comment2": "Trait values available when `resolve`d with a `kManagerDriven` access mode",
+        "managerDriven": {
+          "traits": {
+            "openassetio-mediacreation:content.LocatableContent": {
+              "location": "file:///some/staging/area/cat.usd"
+            }
+          }
+        }
+      }
+    }
+  }
+}
