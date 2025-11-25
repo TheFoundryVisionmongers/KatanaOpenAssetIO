@@ -261,9 +261,6 @@ This project is still work in progress.
   available.
 * Similarly, there is functionality available in OpenAssetIO that is not
   yet exposed through Katana's AssetAPI.
-* Integration of OpenAssetIO UI delegate plugins is still
-  work-in-progress, so any UI delegation desired by an asset system
-  integration must be bespoke for Katana, for now.
 
 ## Contributing
 
