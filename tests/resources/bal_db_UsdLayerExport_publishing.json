@@ -17,12 +17,11 @@
         {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:threeDimensional.Spatial": {},
-            "openassetio-mediacreation:identity.DisplayName": {
+            "openassetio-mediacreation:threeDimensional.Spatial": {
               "name": "Cat"
             },
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/permanent/storage/cat.v1.klf"
+              "location": "file:///some/permanent/storage/cat.v1.usd"
             }
           }
         }
@@ -32,15 +31,14 @@
         "write": {
           "traits": {
             "openassetio-mediacreation:usage.Entity": {},
-            "openassetio-mediacreation:threeDimensional.Spatial": {},
-            "openassetio-mediacreation:content.LocatableContent": {}
+            "openassetio-mediacreation:threeDimensional.Spatial": {}
           }
         },
         "__comment2": "Trait values available when `resolve`d with a `kManagerDriven` access mode",
         "managerDriven": {
           "traits": {
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/staging/area/cat.klf"
+              "location": "file:///some/staging/area/cat.usd"
             }
           }
         }

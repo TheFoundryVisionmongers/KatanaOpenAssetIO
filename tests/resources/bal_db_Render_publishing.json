@@ -20,7 +20,7 @@
             "openassetio-mediacreation:twoDimensional.Image": {},
             "openassetio-mediacreation:twoDimensional.PixelBased": {},
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/permanent/storage/cat.v1.exr"
+              "location": "file://${TEST_TMP_DIR}/permanent/cat.v1.exr"
             }
           }
         }
@@ -39,7 +39,7 @@
         "managerDriven": {
           "traits": {
             "openassetio-mediacreation:content.LocatableContent": {
-              "location": "file:///some/staging/area/cat.%23%23%23%23.exr"
+              "location": "file://${TEST_TMP_DIR}/staging/cat.%23%23%23%23.exr"
             }
           }
         }

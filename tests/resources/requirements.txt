@@ -4,5 +4,5 @@
 
 # Required by the CMake CTest tests.
 
-openassetio-mediacreation==1.0.0a11
+openassetio-mediacreation==1.0.0a12
 openassetio-manager-bal==1.0.0b1.post1

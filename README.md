@@ -139,13 +139,13 @@ the above.
 
 ### CMake variables
 
-| Name                                          | Description                                                         | Default |
-|-----------------------------------------------|---------------------------------------------------------------------|---------|
-| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS       | Enable a large set of compiler warnings for project targets         | ON      |
-| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING   | Enable security hardening features for project targets              | ON      |
-| KATANAOPENASSETIO_ENABLE_UI_DELEGATE          | Enable text box 'browser' alternative and Render node output widget | ON      |
-| KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO | Enable Startup script patching Render node 'Pre-Render' option      | ON      |
-| KATANAOPENASSETIO_ENABLE_TESTS                | Enable unit tests (additional dependencies required)                | OFF     |
+| Name                                          | Description                                                    | Default |
+|-----------------------------------------------|----------------------------------------------------------------|---------|
+| KATANAOPENASSETIO_ENABLE_EXTRA_WARNINGS       | Enable a large set of compiler warnings for project targets    | ON      |
+| KATANAOPENASSETIO_ENABLE_SECURITY_HARDENING   | Enable security hardening features for project targets         | ON      |
+| KATANAOPENASSETIO_ENABLE_UI_DELEGATE          | Enable widget delegates                                        | ON      |
+| KATANAOPENASSETIO_ENABLE_PATCH_RENDERNODEINFO | Enable Startup script patching Render node 'Pre-Render' option | ON      |
+| KATANAOPENASSETIO_ENABLE_TESTS                | Enable unit tests (additional dependencies required)           | OFF     |
 
 ## Running tests
 
@@ -234,6 +234,23 @@ A listing of the non-standard MIME types in use follows:
 | DTEX images              | dtex           | image/x-dtex                                                |
 | Deepshad images          | deepshad       | image/x-deepshad                                            |
 | Histogram                | hist           | application/vnd.foundry.katana.histogram+xml                |
+| USD (non-usda/usdz)      | usd            | model/vnd.usd                                               |
+
+## UI delegation
+
+KatanaOpenAssetIO adds an OpenAssetIO UI Delegate to Katana Widget
+Delegate adapter layer. An OpenAssetIO UI Delegate plugin can supply
+
+* An asset browser, for both loading and publishing.
+  - Traits: `{Browser, EntityProvider, Singular, InPlace}`
+* A control widget that replaces the standard text box for typing entity
+  references (asset identifiers).
+  - Traits: `{Inline, EntityProvider, Singular, Detached}`
+
+If no OpenAssetIO UI Delegate plugin is available, a default asset
+"browser" tab will be added, which is a simple text box for typing
+entity references. This enables some of Katana's UI that relies on the
+file/asset browser to supply target entity references.
 
 ## Limitations
 

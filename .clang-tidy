@@ -82,3 +82,7 @@ CheckOptions:
     # Don't warn about rule of 5 for classes that just have a destructor
     # and no other special member functions.
     - { key: cppcoreguidelines-special-member-functions.AllowSoleDefaultDtor,  value: 1 }
+    # Suppressions for `#include` checks.
+    # * Python.h, pystate.h, pytypedefs.h, object.h, pyerrors.h,
+    #   abstract.h - Python.h is the umbrella header.
+    - { key: misc-include-cleaner.IgnoreHeaders,  value: "Python.h;pystate.h;pytypedefs.h;object.h;pyerrors.h;abstract.h" }

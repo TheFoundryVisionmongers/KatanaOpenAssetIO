@@ -18,6 +18,8 @@
 #include <utility>
 #include <variant>
 
+#include <Python.h>
+
 #include <FnAsset/FnDefaultFileSequencePlugin.h>
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
@@ -35,6 +37,7 @@
 #include <openassetio/log/LoggerInterface.hpp>
 #include <openassetio/pluginSystem/CppPluginSystemManagerImplementationFactory.hpp>
 #include <openassetio/pluginSystem/HybridPluginSystemManagerImplementationFactory.hpp>
+#include <openassetio/python/converter.hpp>
 #include <openassetio/python/hostApi.hpp>
 #include <openassetio/trait/TraitsData.hpp>
 #include <openassetio/trait/property.hpp>
@@ -337,6 +340,40 @@ bool OpenAssetIOAsset::runAssetPluginCommand(const std::string& assetId,
             return false;
         }
     }
+
+    if (command == "setManagerAndContextInPythonDict")
+    {
+        // Convert a CPython `id` number, stored in a string, to a PyObject
+        // pointer.
+        const auto pyIdStrToObj = [](const std::string& pyIdAsStr)
+        {
+            std::intptr_t pyId = 0;
+            std::stringstream sstr{pyIdAsStr};
+            sstr >> pyId;
+            // NOLINTNEXTLINE(*-pro-type-reinterpret-cast, *-no-int-to-ptr)
+            return reinterpret_cast<PyObject*>(pyId);
+        };
+
+        PyObject* pyOutDict = pyIdStrToObj(commandArgs.at("outDictId"));
+        // Check if pyOutObj is a dict
+        if (!PyDict_Check(pyOutDict))
+        {
+            if (logger_->isSeverityLogged(Severity::kDebug))
+            {
+                logger_->debug(
+                    "OpenAssetIOAsset::runAssetPluginCommand -> ERROR: Invalid object type for "
+                    "output variable - must be dict");
+            }
+            return false;
+        }
+        PyObject* pySrcObj = openassetio::python::converter::castToPyObject(manager_);
+        PyDict_SetItemString(pyOutDict, "manager", pySrcObj);
+        Py_DECREF(pySrcObj);
+        pySrcObj = openassetio::python::converter::castToPyObject(context_);
+        PyDict_SetItemString(pyOutDict, "context", pySrcObj);
+        Py_DECREF(pySrcObj);
+        return true;
+    }
     return true;
 }
 
@@ -348,6 +385,11 @@ void OpenAssetIOAsset::resolveAsset(const std::string& assetId, std::string& res
         {
             logger_->debugApi(
                 logging::concatAsStr("OpenAssetIOAsset::resolveAsset(assetId=", assetId, ")"));
+        }
+        if (!manager_->isEntityReferenceString(assetId))
+        {
+            resolvedAsset = assetId;
+            return;
         }
 
         using openassetio::access::ResolveAccess;
@@ -709,17 +751,34 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
         (void)includeDefaults;  // TODO(DF): How should we use this?
 
         using openassetio::access::ResolveAccess;
+        using openassetio::trait::TraitsDataPtr;
         using openassetio::trait::TraitSet;
         using openassetio_mediacreation::traits::identity::DisplayNameTrait;
         using openassetio_mediacreation::traits::lifecycle::VersionTrait;
+        using BatchElementErrorPolicyTag =
+            openassetio::hostApi::Manager::BatchElementErrorPolicyTag;
 
         auto [entityReference, managerDrivenValue] =
             assetIdToEntityRefAndManagerDrivenValue(assetId);
 
-        const auto traitsData = manager_->resolve(entityReference,
-                                                  {DisplayNameTrait::kId, VersionTrait::kId},
-                                                  ResolveAccess::kRead,
-                                                  context_);
+        // Use a kVariant return type, so we can ignore errors - e.g.
+        // the entity might not exist (yet).
+        const auto maybeTraitsData = manager_->resolve(entityReference,
+                                                       {DisplayNameTrait::kId, VersionTrait::kId},
+                                                       ResolveAccess::kRead,
+                                                       context_,
+                                                       BatchElementErrorPolicyTag::kVariant);
+
+        if (TraitsDataPtr const* traitsData = std::get_if<TraitsDataPtr>(&maybeTraitsData))
+        {
+            returnFields[kFnAssetFieldName] = DisplayNameTrait{*traitsData}.getName("");
+            returnFields[kFnAssetFieldVersion] = VersionTrait{*traitsData}.getSpecifiedTag("");
+        }
+        else
+        {
+            returnFields[kFnAssetFieldName] = "";
+            returnFields[kFnAssetFieldVersion] = "";
+        }
 
         // Katana's AssetAPI only standardises Name & Version fields.
         returnFields[constants::kEntityReference] = entityReference.toString();
@@ -727,8 +786,6 @@ void OpenAssetIOAsset::getAssetFields(const std::string& assetId,
         {
             returnFields[constants::kManagerDrivenValue] = std::move(managerDrivenValue);
         }
-        returnFields[kFnAssetFieldName] = DisplayNameTrait{traitsData}.getName("");
-        returnFields[kFnAssetFieldVersion] = VersionTrait{traitsData}.getSpecifiedTag("");
 
         if (logger_->isSeverityLogged(Severity::kDebugApi))
         {

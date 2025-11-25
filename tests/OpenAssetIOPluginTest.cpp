@@ -2,14 +2,21 @@
 // SPDX-License-Identifier: Apache-2.0
 // Copyright 2025 The Foundry Visionmongers Ltd
 #include <cstddef>
+#include <cstdlib>
+#include <ctime>
+#include <filesystem>
+#include <fstream>
 #include <memory>
 #include <ostream>
+#include <stdexcept>
 #include <string>
 #include <tuple>
 #include <utility>
 
 #include <catch2/catch_test_macros.hpp>
 #include <catch2/generators/catch_generators.hpp>
+
+#include <pybind11/pybind11.h>
 
 #include <FnAsset/plugin/FnAsset.h>
 #include <FnAsset/suite/FnAssetSuite.h>
@@ -67,6 +74,39 @@ auto assetPluginInstance()
     auto [instance, assetSuite, instanceHandle] = assetPluginInstanceAndSuiteAndHandle();
     return instance;
 }
+
+/**
+ * Create and return a unique temporary directory.
+ */
+std::filesystem::path createTempDir()
+{
+    // Seed rand with current time, to ensure it's unique across runs.
+    std::srand(static_cast<unsigned int>(std::time(nullptr)));
+    // Create a random subdirectory name to avoid collisions.
+    std::string randomSubDirName = "katana_openassetio_test_";
+    randomSubDirName += std::to_string(std::rand());
+    // Generate subdir off system temp dir.
+    auto tempDir = std::filesystem::temp_directory_path();
+    tempDir /= randomSubDirName;
+    // Create the temporary directory.
+    std::filesystem::create_directories(tempDir);
+    return tempDir;
+}
+
+/**
+ * Create an empty file at the specified path.
+ *
+ * @param filePath The path to the file to create.
+ * @throws std::runtime_error if the file could not be created.
+ */
+void touchFile(const std::filesystem::path& filePath)
+{
+    // Create an empty file at the specified path.
+    if (const std::ofstream file{filePath}; !file)
+    {
+        throw std::runtime_error("Failed to create file: " + filePath.string());
+    }
+}
 }  // namespace
 
 // Disable checks triggered by Catch2 macros.
@@ -77,6 +117,31 @@ TEST_CASE("BAL plugin is loaded")
     auto plugin = assetPluginInstance();
     CHECK(plugin->isAssetId("bal:///"));
     CHECK_FALSE(plugin->isAssetId("notbal:///"));
+}
+
+SCENARIO("getAssetFields()")
+{
+    auto plugin = assetPluginInstance();
+
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_simple_image.json"}}));
+
+    GIVEN("an asset ID with no corresponding entity")
+    {
+        const std::string assetId = "bal:///notfound";
+
+        WHEN("getAssetFields is called")
+        {
+            FnKat::Asset::StringMap assetFields;
+            plugin->getAssetFields(assetId, true, assetFields);
+
+            THEN("asset fields are available but empty")
+            {
+                CHECK(assetFields[kFnAssetFieldName] == "");
+                CHECK(assetFields[kFnAssetFieldVersion] == "");
+            }
+        }
+    }
 }
 
 SCENARIO("getAssetDisplayName()")
@@ -298,7 +363,7 @@ SCENARIO("LookFileBake / LookFileMaterialsOut publishing")
                                 const FnKat::Asset::StringMap expected = {
                                     {"katana-openassetio:application,LookFile", ""},
                                     {"openassetio-mediacreation:usage,Entity", ""},
-                                    {"openassetio-mediacreation:application,Work", ""},
+                                    {"openassetio-mediacreation:threeDimensional,Spatial", ""},
                                     {"openassetio-mediacreation:lifecycle,Version", ""},
                                     {"openassetio-mediacreation:lifecycle,Version,specifiedTag",
                                      "2"},
@@ -381,6 +446,18 @@ SCENARIO("LookFileBake / LookFileMaterialsOut publishing")
 SCENARIO("Render node publishing")
 {
     auto plugin = assetPluginInstance();
+
+    // Create temporary directories to write dummy renders to.
+    const auto tmpDir = createTempDir();
+    const auto permanentStorageDir = tmpDir / "permanent";
+    const auto stagingAreaDir = tmpDir / "staging";
+    std::filesystem::create_directories(permanentStorageDir);
+    std::filesystem::create_directories(stagingAreaDir);
+    // Set environment variable that BAL will use to substitute into
+    // paths. Must set through Python since os.environ is cached and
+    // can't be modified from C.
+    pybind11::module_::import("os").attr("environ")["TEST_TMP_DIR"] = tmpDir.string();
+
     REQUIRE(plugin->runAssetPluginCommand(
         "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_Render_publishing.json"}}));
 
@@ -398,7 +475,7 @@ SCENARIO("Render node publishing")
                 const FnKat::Asset::StringMap preArgs{
                     {"colorspace", "linear"},
                     {"ext", "deepexr"},
-                    {"filePathTemplate", "/some/permanent/storage/cat.v1.exr"},
+                    {"filePathTemplate", (permanentStorageDir / "cat.v1.exr").string()},
                     {"locationSettings.renderLocation", "bal:///cat?v=1"},
                     {"outputName", "deep"},
                     {"res", "square_512"},
@@ -410,12 +487,13 @@ SCENARIO("Render node publishing")
                     plugin->createAssetAndPath(
                         nullptr, "image", assetFields, preArgs, true, inFlightAssetId);
 
+                    const auto stagingAreaFilePath = (stagingAreaDir / "cat.####.exr").string();
+
                     THEN(
                         "in-flight asset ID is the expected preflight reference with "
                         "manager-driven value appended")
                     {
-                        CHECK(inFlightAssetId ==
-                              "bal:///cat#value=/some/staging/area/cat.####.exr");
+                        CHECK(inFlightAssetId == "bal:///cat#value=" + stagingAreaFilePath);
                     }
 
                     AND_WHEN("in-flight reference fields are retrieved, including defaults")
@@ -428,7 +506,7 @@ SCENARIO("Render node publishing")
                             const FnKat::Asset::StringMap postArgs{
                                 {"colorspace", "linear"},
                                 {"ext", "deepexr"},
-                                {"filePathTemplate", "/some/staging/area/cat.####.exr"},
+                                {"filePathTemplate", stagingAreaFilePath},
                                 {"locationSettings", ""},
                                 {"outputName", "deep"},
                                 {"res", "square_512"},
@@ -436,6 +514,8 @@ SCENARIO("Render node publishing")
 
                             WHEN("asset creation is finished")
                             {
+                                touchFile(stagingAreaDir / "cat.0001.exr");
+
                                 std::string newAssetId;
                                 plugin->postCreateAsset(
                                     nullptr, "image", inFlightAssetFields, postArgs, newAssetId);
@@ -477,10 +557,23 @@ SCENARIO("Render node publishing")
                                         {"openassetio-mediacreation:content,LocatableContent", ""},
                                         {"openassetio-mediacreation:content,LocatableContent,"
                                          "location",
-                                         "file:///some/staging/area/cat.%23%23%23%23.exr"},
+                                         "file://" + stagingAreaDir.string() +
+                                             "/cat.%23%23%23%23.exr"},
                                         {"openassetio-mediacreation:content,LocatableContent,"
                                          "mimeType",
-                                         "image/x-exr"}};
+                                         "image/x-exr"},
+                                        {"openassetio-mediacreation:timeDomain,FrameRanged", ""},
+                                        {"openassetio-mediacreation:timeDomain,FrameRanged,"
+                                         "startFrame",
+                                         "1"},
+                                        {"openassetio-mediacreation:timeDomain,FrameRanged,"
+                                         "endFrame",
+                                         "1"},
+                                        {"openassetio-mediacreation:timeDomain,FrameRanged,inFrame",
+                                         "1"},
+                                        {"openassetio-mediacreation:timeDomain,FrameRanged,"
+                                         "outFrame",
+                                         "1"}};
 
                                     CHECK(actual == expected);
                                 }
@@ -891,6 +984,7 @@ SCENARIO("LiveGroup publishing")
                         {"katana-openassetio:nodes,LiveGroup", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
+                        {"openassetio-mediacreation:application,Config", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
                         {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
                         {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
@@ -1010,6 +1104,7 @@ SCENARIO("Macro publishing")
                         {"katana-openassetio:application,Macro", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
+                        {"openassetio-mediacreation:application,Config", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
                         {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
                         {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
@@ -1066,6 +1161,7 @@ SCENARIO("FCurve publishing")
                         {"katana-openassetio:timeDomain,FCurve", ""},
                         {"openassetio-mediacreation:usage,Entity", ""},
                         {"openassetio-mediacreation:application,Work", ""},
+                        {"openassetio-mediacreation:application,Config", ""},
                         {"openassetio-mediacreation:lifecycle,Version", ""},
                         {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
                         {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
@@ -1133,6 +1229,69 @@ SCENARIO("Scene Graph Bookmarks publishing")
                          "file:///some/staging/area/cat.xml"},
                         {"openassetio-mediacreation:content,LocatableContent,mimeType",
                          "application/vnd.foundry.katana.scenegraph-bookmarks+xml"}};
+
+                    CHECK(actual == expected);
+                }
+            }
+        }
+    }
+}
+
+/**
+ * This test simulates the "Export" button in the UsdLayerExport node.
+ */
+SCENARIO("UsdLayerExport publishing")
+{
+    auto plugin = assetPluginInstance();
+    REQUIRE(plugin->runAssetPluginCommand(
+        "", "initialize", {{"library_path", BAL_DB_DIR "/bal_db_UsdLayerExport_publishing.json"}}));
+
+    GIVEN("target asset")
+    {
+        const std::string assetId = "bal:///cat?v=1";
+        FnKat::Asset::StringMap assetFields;
+        plugin->getAssetFields(assetId, true, assetFields);
+
+        AND_GIVEN("UsdLayerExport args")
+        {
+            using P = std::pair<std::string, std::string>;
+
+            const P extAndMIME = GENERATE(P{"usda", "model/vnd.usda"},
+                                          P{"usdz", "model/vnd.usdz+zip"},
+                                          P{"usd", "model/vnd.usd"},
+                                          P{"something_else", "model/vnd.usd"},
+                                          P{"", "model/vnd.usd"});
+
+            using SM = FnKat::Asset::StringMap;
+            const auto args =
+                extAndMIME.first.empty() ? SM{} : SM{{"fileExtension", extAndMIME.first}};
+
+            WHEN("asset is published")
+            {
+                std::string inFlightAssetId;
+                plugin->createAssetAndPath(
+                    nullptr, "usd", assetFields, args, true, inFlightAssetId);
+                FnKat::Asset::StringMap inFlightAssetFields;
+                plugin->getAssetFields(inFlightAssetId, false, inFlightAssetFields);
+                std::string newAssetId;
+                plugin->postCreateAsset(nullptr, "usd", inFlightAssetFields, args, newAssetId);
+
+                THEN("entity has been registered with expected traits")
+                {
+                    FnKat::Asset::StringMap actual;
+                    plugin->getAssetAttributes(newAssetId, "", actual);
+
+                    const FnKat::Asset::StringMap expected = {
+                        {"openassetio-mediacreation:usage,Entity", ""},
+                        {"openassetio-mediacreation:threeDimensional,Spatial", ""},
+                        {"openassetio-mediacreation:lifecycle,Version", ""},
+                        {"openassetio-mediacreation:lifecycle,Version,specifiedTag", "2"},
+                        {"openassetio-mediacreation:lifecycle,Version,stableTag", "2"},
+                        {"openassetio-mediacreation:content,LocatableContent", ""},
+                        {"openassetio-mediacreation:content,LocatableContent,location",
+                         "file:///some/staging/area/cat.usd"},
+                        {"openassetio-mediacreation:content,LocatableContent,mimeType",
+                         extAndMIME.second}};
 
                     CHECK(actual == expected);
                 }

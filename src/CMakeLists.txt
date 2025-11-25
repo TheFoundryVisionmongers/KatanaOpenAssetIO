@@ -69,20 +69,22 @@ if (NOT TRAITGEN)
 endif ()
 
 # Expected output path of the generated C++ headers.
-set(_trait_headers_dir ${CMAKE_CURRENT_BINARY_DIR}/traits/katana_openassetio/include)
+set(_trait_dir ${CMAKE_CURRENT_BINARY_DIR}/traits/katana_openassetio)
 
 # Add a command (and target) to generate C++ headers from traits.yml.
 add_custom_command(
-    OUTPUT ${_trait_headers_dir}
+    OUTPUT ${_trait_dir}
     COMMAND ${TRAITGEN} ${CMAKE_CURRENT_SOURCE_DIR}/traits.yml -g cpp
+    -o ${CMAKE_CURRENT_BINARY_DIR}/traits
+    COMMAND ${TRAITGEN} ${CMAKE_CURRENT_SOURCE_DIR}/traits.yml -g python
     -o ${CMAKE_CURRENT_BINARY_DIR}/traits
     DEPENDS ${CMAKE_CURRENT_SOURCE_DIR}/traits.yml
     COMMENT "Generating OpenAssetIO trait headers"
 )
-add_custom_target(KatanaOpenAssetIOTraits DEPENDS ${_trait_headers_dir})
+add_custom_target(KatanaOpenAssetIOTraits DEPENDS ${_trait_dir})
 
 # Add dependencies on headers to main plugin target.
-target_include_directories(KatanaOpenAssetIOPlugin SYSTEM PRIVATE ${_trait_headers_dir})
+target_include_directories(KatanaOpenAssetIOPlugin SYSTEM PRIVATE ${_trait_dir}/include)
 add_dependencies(KatanaOpenAssetIOPlugin KatanaOpenAssetIOTraits)
 
 
@@ -97,6 +99,13 @@ install(
     FILES ${CMAKE_CURRENT_SOURCE_DIR}/traits.yml
     COMPONENT Plugin
     DESTINATION .
+)
+
+# Distribute generated traits.
+install(
+    DIRECTORY ${_trait_dir}
+    COMPONENT Plugin
+    DESTINATION site-packages
 )
 
 if (KATANAOPENASSETIO_ENABLE_UI_DELEGATE)
